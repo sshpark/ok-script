@@ -233,7 +233,9 @@ def _create_ok_config(config):
 class _OverlayConfigMixin:
     def _blur_enabled(self):
         executor = getattr(og, 'executor', None)
-        return (callable(self.config.get('blur_area'))
+        config = getattr(self, 'config', None)
+        return (config is not None
+                and callable(config.get('blur_area'))
                 and bool(getattr(executor, 'basic_options', {}).get('Enable Blur', False)))
 
     def _overlay_needed(self):

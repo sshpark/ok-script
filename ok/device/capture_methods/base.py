@@ -29,7 +29,7 @@ class BaseCaptureMethod:
             self.get_frame()
 
     def get_frame(self):
-        if self.exit_event.is_set():
+        if self.exit_event is not None and self.exit_event.is_set():
             return
         try:
             frame = self.do_get_frame()

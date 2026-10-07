@@ -1,4 +1,8 @@
-import win32api
+import sys
+
+if sys.platform == 'win32':
+    import win32api
+
 from PySide6.QtCore import Qt, QPoint, QTimer, QRectF
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QGuiApplication, QBrush, QImage
 from PySide6.QtWidgets import QWidget
@@ -8,6 +12,35 @@ from ok import og
 from ok.ui.qt.Communicate import communicate
 
 logger = Logger.get_logger(__name__)
+
+
+def _get_cursor_pos():
+    """Cross-platform cursor position."""
+    if sys.platform == 'win32':
+        return win32api.GetCursorPos()
+    else:
+        try:
+            from ok.util.cursor import get_cursor_pos
+            return get_cursor_pos()
+        except Exception:
+            return (0, 0)
+
+
+def _get_key_state(vk_code):
+    """Cross-platform key state check. Returns True if key is pressed."""
+    if sys.platform == 'win32':
+        return bool(win32api.GetAsyncKeyState(vk_code) & 0x8000)
+    else:
+        try:
+            import Quartz
+            flags = Quartz.CGEventSourceFlagsState(Quartz.kCGEventSourceStateCombinedSessionState)
+            if vk_code == 0x12:  # Alt/Option
+                return bool(flags & Quartz.kCGEventFlagMaskAlternate)
+            elif vk_code == 0x02:  # Right mouse button
+                return bool(flags & Quartz.kCGEventFlagMaskSecondaryClick)
+        except Exception:
+            pass
+        return False
 
 
 class OverlayWidget(QWidget):
@@ -32,13 +65,13 @@ class OverlayWidget(QWidget):
         try:
             if not self.isVisible():
                 return
-            x, y = win32api.GetCursorPos()
+            x, y = _get_cursor_pos()
             relative = self.mapFromGlobal(QPoint(x / self.scaling, y / self.scaling))
             if self._mouse_position != relative and relative.x() > 0 and relative.y() > 0:
                 self._mouse_position = relative
 
-            alt_down = bool(win32api.GetAsyncKeyState(0x12) & 0x8000)
-            right_down = bool(win32api.GetAsyncKeyState(0x02) & 0x8000)
+            alt_down = _get_key_state(0x12)
+            right_down = _get_key_state(0x02)
             
             self._is_alt_down = alt_down
             

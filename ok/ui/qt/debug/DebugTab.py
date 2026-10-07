@@ -1,15 +1,23 @@
+import sys
 import time
-from ctypes import windll, wintypes
+
+if sys.platform == 'win32':
+    from ctypes import windll, wintypes
+    from _ctypes import byref
+    from ok.capture.windows.dump import dump_threads
+else:
+    windll = None
+    wintypes = None
+    byref = None
+    dump_threads = None
 
 from PySide6.QtCore import Qt, Signal, QCoreApplication
 from PySide6.QtWidgets import QWidget, QFileDialog, QCompleter, QVBoxLayout, QHBoxLayout
-from _ctypes import byref
 from qfluentwidgets import PushButton, FlowLayout, ComboBox, SearchLineEdit, TextEdit
 
 from ok import Config, og
 from ok import Handler
 from ok import Logger
-from ok.capture.windows.dump import dump_threads
 from ok.device.capture import ImageCaptureMethod
 from ok.device.interaction import DoNothingInteraction
 from ok.ui.qt.i18n.GettextTranslator import convert_to_mo_files
@@ -110,6 +118,8 @@ class DebugTab(Tab):
         reveal_in_explorer(folder)
 
     def check_hotkey(self):
+        if sys.platform != 'win32':
+            return
         # Example event type, you should use the appropriate QEvent.Type for your case
         msg = wintypes.MSG()
 
@@ -127,6 +137,8 @@ class DebugTab(Tab):
         self.handler.post(self.check_hotkey, 0.1)
 
     def bind_hot_keys(self):
+        if sys.platform != 'win32':
+            return
         MOD_ALT = 0x0001
         MOD_CONTROL = 0x0002
         VK_D = 0x44  # Virtual-Key code for 'D'
@@ -140,6 +152,8 @@ class DebugTab(Tab):
 
     @staticmethod
     def unregister():
+        if sys.platform != 'win32':
+            return
         # Unregister the hotkeys
         logger.debug('Unregister the hotkeys')
         windll.user32.UnregisterHotKey(None, 1)

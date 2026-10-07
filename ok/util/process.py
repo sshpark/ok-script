@@ -32,6 +32,8 @@ _exit_watchdog_started = False
 
 def is_admin():
     try:
+        if sys.platform != 'win32':
+            return os.geteuid() == 0
         # Only Windows users with admin privileges can read the C drive directly
         return ctypes.windll.shell32.IsUserAnAdmin()
     except:
@@ -232,9 +234,33 @@ def _retain_mutex(handle, owner_file):
         _mutex_cleanup_registered = True
 
 
-def check_mutex(wait_time=5, kill_wait_time=3):
-    if _mutex_handle:
+_mac_lock_file = None
+
+
+def _check_mutex_unix():
+    import fcntl
+    global _mac_lock_file
+    path = os.getcwd()
+    mutex_name = hashlib.md5(path.encode()).hexdigest()
+    lock_dir = os.path.join(os.path.expanduser('~'), '.ok-script')
+    os.makedirs(lock_dir, exist_ok=True)
+    lock_path = os.path.join(lock_dir, f'{mutex_name}.lock')
+    try:
+        _mac_lock_file = open(lock_path, 'w')
+        fcntl.flock(_mac_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _mac_lock_file.write(str(os.getpid()))
+        _mac_lock_file.flush()
         return True
+    except (IOError, OSError) as e:
+        logger.error(f'Another instance is already running: {e}')
+        return False
+
+
+def check_mutex(wait_time=5, kill_wait_time=3):
+    if _mutex_handle or _mac_lock_file:
+        return True
+    if sys.platform != 'win32':
+        return _check_mutex_unix()
     _LPSECURITY_ATTRIBUTES = wintypes.LPVOID
     _BOOL = ctypes.c_int
     _DWORD = ctypes.c_ulong
@@ -401,7 +427,8 @@ def execute(game_cmd: str, arguments=None, start_method=WINDOWS_START_METHOD_STA
             if os.path.exists(game_path):
                 try:
                     logger.info(f'try execute {game_cmd} {arguments} with {start_method}')
-                    working_dir = os.path.dirname(game_path)
+                    import ntpath
+                    working_dir = ntpath.dirname(game_path) if '\\' in game_path else os.path.dirname(game_path)
 
                     if start_method == WINDOWS_START_METHOD_OS_STARTFILE:
                         _, args_part = _split_game_command(game_cmd, game_path, arguments)

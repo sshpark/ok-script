@@ -1,8 +1,6 @@
 import sys
 from enum import IntEnum
 
-import win32gui
-
 class ImageShape(IntEnum):
     Y = 0
     X = 1
@@ -37,5 +35,6 @@ def is_valid_hwnd(hwnd: int):
     if not hwnd:
         return False
     if sys.platform == "win32":
+        import win32gui
         return bool(win32gui.IsWindow(hwnd) and win32gui.GetWindowText(hwnd))
     return True

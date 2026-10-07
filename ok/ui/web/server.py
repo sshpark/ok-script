@@ -47,7 +47,7 @@ def _resize_bounds(bounds, hit_test, dx, dy, min_width, min_height):
 
 def _make_resize_handle_transparent(control):
     """Hide a native resize overlay without making its hit area click-through."""
-    if os.name != "nt":
+    if os.name != "nt" and not getattr(ctypes, "windll", None):
         return False
     user32 = ctypes.windll.user32
     user32.GetWindowLongW.argtypes = [ctypes.c_void_p, ctypes.c_int]
@@ -199,7 +199,7 @@ class _RoundedWindowRegion:
         self._last_region_size = None
 
     def apply(self, *_):
-        if os.name != "nt":
+        if os.name != "nt" and not getattr(ctypes, "windll", None):
             return False
         native_window = getattr(self.window, "native", None)
         if native_window is None:

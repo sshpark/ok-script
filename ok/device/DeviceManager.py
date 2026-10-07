@@ -22,19 +22,23 @@ from ok.util.window import windows_graphics_available, find_hwnd
 logger = Logger.get_logger(__name__)
 
 
+import ntpath
+
+
 def resolve_emulator_window_exe(exe_path, instance_name=None):
     """Resolve an emulator launcher path to the instance window executable."""
     if not exe_path:
         return exe_path
 
-    normalized_path = os.path.normpath(exe_path)
-    if os.path.basename(normalized_path).lower() != 'mumunxmain.exe':
+    path_mod = ntpath if '\\' in exe_path else os.path
+    normalized_path = path_mod.normpath(exe_path)
+    if path_mod.basename(normalized_path).lower() != 'mumunxmain.exe':
         return exe_path
 
     match = re.search(r'-(\d+(?:\.\d+)+)-\d+$', instance_name or '')
     version = match.group(1) if match else '12.0'
-    install_root = os.path.dirname(os.path.dirname(normalized_path))
-    return os.path.join(
+    install_root = path_mod.dirname(path_mod.dirname(normalized_path))
+    return path_mod.join(
         install_root, 'nx_device', version, 'shell', 'MuMuNxDevice.exe')
 
 
@@ -67,13 +71,14 @@ class DeviceManager:
         self.device_dict = {}
         self.exit_event = exit_event
         self.resolution_dict = {}
-        default_capture = 'windows' if app_config.get('windows') else (
-            'browser' if app_config.get('browser') else 'adb')
+        default_capture = 'windows' if (app_config.get('windows') and sys.platform == 'win32') else (
+            'browser' if app_config.get('browser') else (
+                'macos' if (app_config.get('macos') or sys.platform == 'darwin') else 'adb'))
         self.config = Config("devices",
                              {"preferred": "", "pc_full_path": "", 'capture': default_capture, 'selected_exe': '',
                               'selected_hwnd': 0, 'interaction': ''})
         self.handler = Handler(exit_event, 'RefreshAdb')
-        if self.windows_capture_config is not None:
+        if self.windows_capture_config is not None and sys.platform == 'win32':
             if isinstance(self.windows_capture_config.get('exe'), str):
                 self.windows_capture_config['exe'] = [self.windows_capture_config.get('exe')]
 
@@ -120,6 +125,24 @@ class DeviceManager:
                 self.win_interaction_class = PynputInteraction
         else:
             self.hwnd_window = None
+            self.win_interaction_class = None
+
+        self.mac_config = app_config.get('macos')
+        if sys.platform == 'darwin':
+            mac_cfg = self.mac_config or app_config.get('windows') or {}
+            from ok.device.capture_methods.mac_window import MacWindow
+            from ok.device.interaction_methods.mac_interaction import MacInteraction
+            self.mac_window = MacWindow(exit_event=self.exit_event,
+                                        title=mac_cfg.get('title'),
+                                        exe_names=mac_cfg.get('exe'),
+                                        frame_width=mac_cfg.get('frame_width', 0),
+                                        frame_height=mac_cfg.get('frame_height', 0),
+                                        global_config=self.global_config,
+                                        device_manager=self)
+            self.mac_interaction_class = MacInteraction
+        else:
+            self.mac_window = None
+            self.mac_interaction_class = None
 
         logger.info('__init__ end')
 
@@ -134,6 +157,9 @@ class DeviceManager:
         hwnd_window = self.hwnd_window
         if hwnd_window is not None:
             hwnd_window.stop()
+
+        if getattr(self, 'mac_window', None) is not None:
+            self.mac_window.stop()
 
         capture_method = self.capture_method
         self.capture_method = None
@@ -216,13 +242,15 @@ class DeviceManager:
         devices = list(self.device_dict.values())
         def sort_key(d):
             device_type = d.get('device')
-            if device_type == 'adb':
+            if device_type == 'macos':
                 return 0
-            if device_type == 'windows':
+            if device_type == 'adb':
                 return 1
-            if device_type == 'browser':
+            if device_type == 'windows':
                 return 2
-            return 3
+            if device_type == 'browser':
+                return 3
+            return 4
         return sorted(devices, key=sort_key)
 
     def _replace_pc_devices(self, pc_devices):
@@ -286,6 +314,30 @@ class DeviceManager:
             self._replace_pc_devices({imei: pc_device})
             return imei
 
+    def update_mac_device(self):
+        """Update macOS device info. Equivalent of update_pc_device for macOS."""
+        if getattr(self, 'mac_config', None) is None or getattr(self, 'mac_window', None) is None:
+            return None
+
+        nick = "Wuthering Waves"
+        if self.mac_config and self.mac_config.get('title'):
+            nick = self.mac_config.get('title')
+        if self.mac_window.exists:
+            nick = self.mac_window.title or nick
+
+        imei = "mac"
+        mac_device = {"address": "", "imei": imei, "device": "macos",
+                      "model": "", "nick": nick,
+                      "width": self.mac_window.width,
+                      "height": self.mac_window.height,
+                      "capture": "macos",
+                      "connected": self.mac_window.exists,
+                      "resolution": f"{self.mac_window.width}x{self.mac_window.height}"
+                      }
+        logger.info(f'update_mac_device mac_device: {mac_device}')
+        self.device_dict[imei] = mac_device
+        return imei
+
     def update_browser_device(self):
         if self.browser_config and windows_graphics_available():
             width, height = self.browser_config.get('resolution', (1280, 720))
@@ -309,6 +361,7 @@ class DeviceManager:
             self.refresh_emulators(current)
             self.refresh_phones(current)
             self.update_pc_device()
+            self.update_mac_device()
             self.update_browser_device()
         except Exception as e:
             logger.error('refresh error', e)
@@ -645,6 +698,19 @@ class DeviceManager:
             if self.interaction:
                 self.interaction.capture = self.capture_method
 
+    def _get_mac_capture(self, method_name):
+        """Get/create a macOS capture method."""
+        try:
+            from ok.device.capture_methods.update import get_mac_capture
+            from ok.device.capture_methods.mac_capture import MacCaptureMethod, MacCaptureMethodFallback
+            target = MacCaptureMethod
+            if method_name == 'MacCaptureFallback':
+                target = MacCaptureMethodFallback
+            return get_mac_capture(self.capture_method, target, self.mac_window, self.exit_event)
+        except Exception as e:
+            logger.error(f'_get_mac_capture error: {e}')
+            return None
+
     def start(self):
         self.handler.post(self.do_start, remove_existing=True, skip_if_running=True)
 
@@ -673,6 +739,35 @@ class DeviceManager:
             elif self.interaction:
                 self.interaction.capture = self.capture_method
             preferred['connected'] = self.capture_method is not None and self.capture_method.connected()
+        elif preferred['device'] == 'macos':
+            if getattr(self, 'mac_window', None) is None:
+                logger.warning('macos device preferred but no mac_config')
+                return
+            selected_method = self.config.get('capture')
+            mac_cfg = self.mac_config or {}
+            mac_capture_methods = mac_cfg.get('capture_method', ['MacCapture'])
+            if not selected_method or selected_method not in mac_capture_methods:
+                if mac_capture_methods:
+                    selected_method = mac_capture_methods[0]
+
+            if self.mac_window.exists:
+                self.capture_method = self._get_mac_capture(selected_method)
+            else:
+                self.capture_method = self._get_mac_capture('MacCaptureFallback')
+
+            if self.capture_method is None:
+                logger.error('cant find a usable mac capture')
+            else:
+                logger.info(f'capture method {type(self.capture_method)}')
+                if self.interaction:
+                    self.interaction.capture = self.capture_method
+
+            if not isinstance(self.interaction, self.mac_interaction_class):
+                self.interaction = self.mac_interaction_class(self.capture_method)
+            elif self.interaction:
+                self.interaction.capture = self.capture_method
+
+            preferred['connected'] = self.mac_window.exists
         elif preferred['device'] == 'browser':
             if not isinstance(self.capture_method, BrowserCaptureMethod):
                 if self.capture_method is not None:
@@ -786,7 +881,7 @@ class DeviceManager:
 
     def device_connected(self):
         preferred = self.get_preferred_device()
-        if preferred['device'] == 'windows' or preferred['device'] == 'browser':
+        if preferred['device'] in ('windows', 'browser', 'macos'):
             return True
         elif self.device is not None:
             try:

@@ -1,19 +1,33 @@
+import sys
 import time
 
 from ok.util.logger import Logger
-from ok.util.window import windows_graphics_available
 
-from ok.device.capture_methods import bitblt
-from ok.device.capture_methods.bitblt import BitBltCaptureMethod, ForegroundBitBltCaptureMethod
-from ok.device.capture_methods.desktop_duplication import DesktopDuplicationCaptureMethod
-from ok.device.capture_methods.windows_graphics import WindowsGraphicsCaptureMethod
+from ok.device.capture_methods.mac_capture import MacCaptureMethod, MacCaptureMethodFallback
 
 logger = Logger.get_logger(__name__)
 
 WGC_FIRST_FRAME_TIMEOUT = 1.5
 
+from ok.util.window import windows_graphics_available
+
+# Windows-specific imports
+if sys.platform == 'win32':
+    from ok.device.capture_methods import bitblt
+    from ok.device.capture_methods.bitblt import BitBltCaptureMethod, ForegroundBitBltCaptureMethod
+    from ok.device.capture_methods.desktop_duplication import DesktopDuplicationCaptureMethod
+    from ok.device.capture_methods.windows_graphics import WindowsGraphicsCaptureMethod
+else:
+    bitblt = None
+    BitBltCaptureMethod = None
+    ForegroundBitBltCaptureMethod = None
+    DesktopDuplicationCaptureMethod = None
+    WindowsGraphicsCaptureMethod = None
+
 
 def update_capture_method(config, capture_method, hwnd, exit_event=None, selected_method=None):
+    if sys.platform != 'win32':
+        return None
     try:
         method_preferences = config.get('capture_method', [])
         if selected_method and selected_method in method_preferences:
@@ -78,3 +92,35 @@ def get_capture(capture_method, target_method, hwnd, exit_event):
     capture_method.hwnd_window = hwnd
     capture_method.exit_event = exit_event
     return capture_method
+
+
+def get_mac_capture(capture_method, target_method, mac_window, exit_event):
+    """macOS version of get_capture."""
+    if not isinstance(capture_method, target_method):
+        if capture_method is not None:
+            capture_method.close()
+        capture_method = target_method(exit_event=exit_event)
+    capture_method.mac_window = mac_window
+    capture_method.exit_event = exit_event
+    return capture_method
+
+
+def update_mac_capture_method(config, capture_method, mac_window, exit_event=None, selected_method=None):
+    """Select macOS capture method. Equivalent of update_capture_method for macOS."""
+    try:
+        method_preferences = config.get('capture_method', [])
+        if selected_method and selected_method in method_preferences:
+            method_preferences = [selected_method] + [m for m in method_preferences if m != selected_method]
+
+        for method_name in method_preferences:
+            if method_name in ('MacCapture', 'MacCaptureMethod', 'CG', 'Quartz'):
+                return get_mac_capture(capture_method, MacCaptureMethod, mac_window, exit_event)
+            elif method_name in ('MacCaptureFallback',):
+                return get_mac_capture(capture_method, MacCaptureMethodFallback, mac_window, exit_event)
+
+        # Default to MacCapture
+        return get_mac_capture(capture_method, MacCaptureMethod, mac_window, exit_event)
+
+    except Exception as e:
+        logger.error(f'update_mac_capture_method exception, return None: {e}')
+        return None
