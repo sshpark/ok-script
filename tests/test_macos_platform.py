@@ -131,3 +131,61 @@ class TestCursorHelpers(unittest.TestCase):
             self.assertEqual(len(pos), 2)
             self.assertIsInstance(pos[0], int)
             self.assertIsInstance(pos[1], int)
+
+
+class TestMacTitleBar(unittest.TestCase):
+    def test_base_window_system_title_bar_rect(self):
+        from PySide6.QtCore import QSize, QRect
+        from ok.ui.qt.widget.BaseWindow import BaseWindow
+
+        bw = BaseWindow.__new__(BaseWindow)
+        bw.isFullScreen = Mock(return_value=False)
+        test_size = QSize(1000, 28)
+
+        with patch('sys.platform', 'darwin'):
+            rect = bw.systemTitleBarRect(test_size)
+            self.assertEqual(rect, QRect(0, 0, 82, 28))
+            self.assertEqual(rect.x(), 0)
+
+        with patch('sys.platform', 'win32'):
+            rect = bw.systemTitleBarRect(test_size)
+            self.assertEqual(rect.x(), 1000 - 75)
+
+    def test_main_window_system_title_bar_rect(self):
+        from PySide6.QtCore import QSize, QRect
+        from ok.ui.qt.MainWindow import MainWindow
+
+        mw = MainWindow.__new__(MainWindow)
+        mw.isFullScreen = Mock(return_value=False)
+        test_size = QSize(1200, 28)
+
+        with patch('sys.platform', 'darwin'):
+            rect = mw.systemTitleBarRect(test_size)
+            self.assertEqual(rect, QRect(0, 0, 82, 28))
+
+    def test_log_window_system_title_bar_rect(self):
+        from PySide6.QtCore import QSize, QRect
+        from ok.ui.qt.start.LogWindow import LogWindow
+
+        lw = LogWindow.__new__(LogWindow)
+        lw.isFullScreen = Mock(return_value=False)
+        test_size = QSize(800, 28)
+
+        with patch('sys.platform', 'darwin'):
+            rect = lw.systemTitleBarRect(test_size)
+            self.assertEqual(rect, QRect(0, 0, 82, 28))
+
+    def test_base_window_set_title_bar_margins(self):
+        from ok.ui.qt.widget.BaseWindow import BaseWindow
+
+        bw = BaseWindow.__new__(BaseWindow)
+        mock_layout = Mock()
+        mock_title_bar = Mock()
+        mock_title_bar.hBoxLayout = mock_layout
+
+        with patch('sys.platform', 'darwin'), \
+             patch.object(BaseWindow, 'setTitleBar', BaseWindow.setTitleBar), \
+             patch('qfluentwidgets.components.widgets.frameless_window.FramelessWindow.setTitleBar'):
+            bw.setTitleBar(mock_title_bar)
+            mock_layout.setContentsMargins.assert_called_once_with(80, 0, 0, 0)
+

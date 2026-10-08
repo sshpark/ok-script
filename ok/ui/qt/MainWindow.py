@@ -3,7 +3,7 @@ import sys
 import threading
 
 import pyappify
-from PySide6.QtCore import QCoreApplication, QEvent, QSize, Qt, QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, QRect, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QScreen
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon, QApplication
 from qfluentwidgets import qconfig, FluentIcon, NavigationItemPosition, MessageBox, InfoBar, \
@@ -87,6 +87,12 @@ class MainWindow(FluentWindow):
         self._configured_theme_color = DEFAULT_THEME_COLOR
         self._sync_system_accent_color(refresh=True)
         qconfig.themeChanged.connect(self._on_theme_changed)
+        if sys.platform == 'darwin':
+            self.navigationInterface.panel.setReturnButtonVisible(False)
+            self.navigationInterface.panel.vBoxLayout.setContentsMargins(0, 48, 0, 5)
+            self.titleBar.hBoxLayout.setContentsMargins(80, 0, 0, 0)
+            self.titleBar.move(0, 0)
+            self.titleBar.resize(self.width(), self.titleBar.height())
         navigation_scroll_area = self.navigationInterface.panel.scrollArea
         navigation_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         enable_touch_scrolling(navigation_scroll_area)
@@ -651,6 +657,17 @@ class MainWindow(FluentWindow):
             NavigationDisplayMode.EXPAND,
             NavigationDisplayMode.MENU,
         )
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if sys.platform == 'darwin':
+            self.titleBar.move(0, 0)
+            self.titleBar.resize(self.width(), self.titleBar.height())
+
+    def systemTitleBarRect(self, size: QSize) -> QRect:
+        if sys.platform == 'darwin':
+            return QRect(0, 0, 82, size.height())
+        return super().systemTitleBarRect(size)
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Resize or event.type() == QEvent.Move:

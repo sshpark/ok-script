@@ -1,5 +1,7 @@
 # coding:utf-8
 
+import sys
+
 from PySide6.QtCore import Qt, QSize, QRect
 from PySide6.QtGui import QPainter, QColor
 from PySide6.QtWidgets import QApplication, QDialog
@@ -77,6 +79,11 @@ class BaseWindow(BackgroundAnimationWidget, FramelessWindow, BaseLoading):
         painter.setBrush(self.backgroundColor)
         painter.drawRect(self.rect())
 
+    def setTitleBar(self, titleBar):
+        super().setTitleBar(titleBar)
+        if sys.platform == 'darwin' and hasattr(titleBar, 'hBoxLayout'):
+            titleBar.hBoxLayout.setContentsMargins(80, 0, 0, 0)
+
     def systemTitleBarRect(self, size: QSize) -> QRect:
         """ Returns the system title bar rect, only works for macOS
 
@@ -85,4 +92,7 @@ class BaseWindow(BackgroundAnimationWidget, FramelessWindow, BaseLoading):
         size: QSize
             original system title bar rect
         """
+        if sys.platform == 'darwin':
+            return QRect(0, 0, 82, size.height())
         return QRect(size.width() - 75, 0 if self.isFullScreen() else 9, 75, size.height())
+

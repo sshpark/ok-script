@@ -2,9 +2,10 @@ import codecs
 import html
 import os
 import re
+import sys
 from pathlib import Path
 
-from PySide6.QtCore import QFileSystemWatcher, QTimer, Qt
+from PySide6.QtCore import QFileSystemWatcher, QRect, QSize, QTimer, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QSizePolicy, QTextEdit, QVBoxLayout, QWidget
 from qfluentwidgets import ComboBox, FluentIcon, FluentWindow, PushButton, SearchLineEdit, isDarkTheme, qconfig
@@ -138,11 +139,16 @@ class LogWindow(FluentWindow):
         self.titleBar.move(0, 0)
         self.titleBar.resize(self.width(), self.titleBar.height())
 
+    def systemTitleBarRect(self, size: QSize) -> QRect:
+        if sys.platform == 'darwin':
+            return QRect(0, 0, 82, size.height())
+        return super().systemTitleBarRect(size)
+
     def _collapse_navigation_chrome(self):
         self.navigationInterface.hide()
         self.navigationInterface.setFixedWidth(0)
         self.widgetLayout.setContentsMargins(0, 48, 0, 0)
-        self.titleBar.hBoxLayout.setContentsMargins(12, 0, 0, 0)
+        self.titleBar.hBoxLayout.setContentsMargins(80 if sys.platform == 'darwin' else 12, 0, 0, 0)
         self.titleBar.move(0, 0)
         self.titleBar.resize(self.width(), self.titleBar.height())
 
