@@ -44,6 +44,23 @@ class SelectCaptureListView(ListWidget):
                 self.reduce_row_to_1()
                 self.item(0).setText(f"{title}")
                 selected = 0
+            elif device.get('device') == "macos":
+                mac_cfg = getattr(og.device_manager, 'mac_config', None) or {}
+                methods = mac_cfg.get('capture_method', ['MacCapture'])
+                while self.count() > len(methods):
+                    self.takeItem(self.count() - 1)
+                for i, method in enumerate(methods):
+                    method_name = method.__name__ if isinstance(method, type) else str(method)
+                    if i < self.count():
+                        self.item(i).setText(self.tr(method_name))
+                    else:
+                        self.addItem(QListWidgetItem(self.tr(method_name)))
+                current_capture = og.device_manager.get_preferred_capture()
+                for i, method in enumerate(methods):
+                    method_name = method.__name__ if isinstance(method, type) else str(method)
+                    if current_capture == method_name:
+                        selected = i
+                        break
             elif device.get('emulator') is not None:
                 title = self.tr("ADB(Supports Background, Slow, High Compatibility, High Latency)")
                 self.reduce_row_to_1()

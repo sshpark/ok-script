@@ -189,3 +189,81 @@ class TestMacTitleBar(unittest.TestCase):
             bw.setTitleBar(mock_title_bar)
             mock_layout.setContentsMargins.assert_called_once_with(80, 0, 0, 0)
 
+    def test_start_tab_macos_device_label(self):
+        from ok.ui.qt.start.StartTab import StartTab
+
+        tab = StartTab.__new__(StartTab)
+        tab.tr = lambda s: "Mac版" if s == "Mac" else ("已断开" if s == "Disconnected" else s)
+        tab.device_list_row = -1
+        tab.device_list = Mock()
+        tab.device_list.count.return_value = 0
+        tab.filter_devices = Mock()
+        tab.start_card = Mock()
+        tab.capture_list = Mock()
+        tab.interaction_list = Mock()
+        tab.logger = Mock()
+
+        mac_device = {
+            'address': '',
+            'imei': 'mac',
+            'device': 'macos',
+            'nick': 'Wuthering Waves',
+            'connected': False,
+            'resolution': '0x0'
+        }
+
+        with patch('ok.og.device_manager') as mock_dm:
+            mock_dm.get_devices.return_value = [mac_device]
+            mock_dm.config = {'preferred': 'mac'}
+            tab.update_capture(finished=False)
+
+            tab.device_list.addItem.assert_called_once()
+            added_item = tab.device_list.addItem.call_args[0][0]
+            self.assertIn("Mac版 已断开: Wuthering Waves", added_item.text())
+
+    def test_select_capture_list_view_macos(self):
+        from ok.ui.qt.start.SelectCaptureListView import SelectCaptureListView
+
+        view = SelectCaptureListView.__new__(SelectCaptureListView)
+        view.count = Mock(return_value=0)
+        view.addItem = Mock()
+        view.blockSignals = Mock()
+        view.setCurrentRow = Mock()
+        view.tr = lambda s: "Mac原生截图" if s == "MacCapture" else s
+
+        mac_device = {'device': 'macos'}
+
+        with patch('ok.og.device_manager') as mock_dm:
+            mock_dm.get_preferred_device.return_value = mac_device
+            mock_dm.mac_config = {'capture_method': ['MacCapture']}
+            mock_dm.get_preferred_capture.return_value = 'MacCapture'
+
+            view.update_for_device()
+            view.addItem.assert_called()
+            added_item = view.addItem.call_args[0][0]
+            self.assertEqual(added_item.text(), "Mac原生截图")
+
+    def test_select_interaction_list_view_macos(self):
+        from ok.ui.qt.start.SelectInteractionListView import SelectInteractionListView
+
+        view = SelectInteractionListView.__new__(SelectInteractionListView)
+        view.count = Mock(return_value=0)
+        view.addItem = Mock()
+        view.blockSignals = Mock()
+        view.setCurrentRow = Mock()
+        view.tr = lambda s: "Mac原生交互" if s == "Mac" else s
+
+        mac_device = {'device': 'macos'}
+
+        with patch('ok.og.device_manager') as mock_dm:
+            mock_dm.get_preferred_device.return_value = mac_device
+            mock_dm.mac_config = {'interaction': ['Mac']}
+            mock_dm.config = {'interaction': 'Mac'}
+
+            view.update_for_device()
+            view.addItem.assert_called()
+            added_item = view.addItem.call_args[0][0]
+            self.assertEqual(added_item.text(), "Mac原生交互")
+
+
+

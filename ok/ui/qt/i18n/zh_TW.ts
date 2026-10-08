@@ -871,6 +871,10 @@
             <translation>PC 版</translation>
         </message>
         <message>
+            <source>Mac</source>
+            <translation>Mac 版</translation>
+        </message>
+        <message>
             <source>Emulator</source>
             <translation>模擬器</translation>
         </message>

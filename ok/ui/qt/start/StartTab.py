@@ -133,6 +133,13 @@ class StartTab(Tab):
                     methods = [methods]
                 if methods and i < len(methods):
                     og.device_manager.set_interaction(methods[i])
+            elif device.get('device') == 'macos':
+                mac_cfg = getattr(og.device_manager, 'mac_config', None) or {}
+                methods = mac_cfg.get('interaction', ['Mac'])
+                if isinstance(methods, str):
+                    methods = [methods]
+                if methods and i < len(methods):
+                    og.device_manager.set_interaction(methods[i])
             self.start_card.update_status()
 
     def on_overlay_boxes_toggled(self, checked):
@@ -288,6 +295,13 @@ class StartTab(Tab):
                     og.device_manager.set_capture("windows")
             elif device.get('device') == 'browser':
                 og.device_manager.set_capture("browser")
+            elif device.get('device') == 'macos':
+                mac_cfg = getattr(og.device_manager, 'mac_config', None) or {}
+                methods = mac_cfg.get('capture_method', ['MacCapture'])
+                if methods and i < len(methods):
+                    og.device_manager.set_capture(methods[i])
+                else:
+                    og.device_manager.set_capture("macos")
             self.start_card.update_status()
 
     def device_index_changed(self):  # i is an index
@@ -316,6 +330,8 @@ class StartTab(Tab):
                 selected = row
             if device['device'] == "windows":
                 method = self.tr("PC")
+            elif device['device'] == "macos":
+                method = self.tr("Mac")
             elif device.get('emulator'):
                 method = self.tr("Emulator")
             elif device['device'] == "browser":

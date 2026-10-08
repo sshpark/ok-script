@@ -587,6 +587,10 @@
             <translation>浏览器截图</translation>
         </message>
         <message>
+            <source>MacCapture</source>
+            <translation>Mac原生截图</translation>
+        </message>
+        <message>
             <source>BitBlt_RenderFull</source>
             <translation>BitBlt_RenderFull - 慢，兼容性最好</translation>
         </message>
@@ -871,6 +875,10 @@
         <message>
             <source>PC</source>
             <translation>PC版</translation>
+        </message>
+        <message>
+            <source>Mac</source>
+            <translation>Mac版</translation>
         </message>
         <message>
             <source>Emulator</source>
@@ -2897,6 +2905,10 @@
         <message>
             <source>BrowserInteraction</source>
             <translation>BrowserInteraction - 后台</translation>
+        </message>
+        <message>
+            <source>Mac</source>
+            <translation>Mac原生交互 - 前台原生</translation>
         </message>
     </context>
     <context>
