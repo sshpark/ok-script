@@ -2,6 +2,8 @@ from ok import DoNothingInteraction
 from ok import ImageCaptureMethod
 from ok.util.clazz import init_class_by_name
 
+import atexit
+
 ok = None
 
 
@@ -36,9 +38,20 @@ def init_ok(config):
             print(f'OKTestRunner scene_config: {scene_config}')
         ok.app
         ok.task_executor.start()
+    else:
+        if scene_config := config.get('scene'):
+            scene = init_class_by_name(scene_config[0], scene_config[1]) if scene_config else None
+            ok.task_executor.scene = scene
+        if ok.device_manager.capture_method is None:
+            ok.device_manager.capture_method = ImageCaptureMethod(
+                ok.device_manager.exit_event, [])
 
 
 def destroy_ok():
     global ok
     if ok is not None:
-        ok.quit()
+        try:
+            ok.quit()
+        except Exception:
+            pass
+        ok = None

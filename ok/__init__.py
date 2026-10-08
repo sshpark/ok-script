@@ -664,7 +664,9 @@ class OK:
     def __init__(self, config):
         import pyappify
         from ok.util.config import Config
+        from ok.util.handler import ExitEvent
 
+        self.exit_event = ExitEvent()
         self.config = config
         ui_config = resolve_ui_config(config)
         if ui_config is not None and ui_config["type"] == "web":
@@ -727,16 +729,17 @@ class OK:
         register_notifications(self.global_config)
         og.global_config = self.global_config
         og.set_use_dml()
-        try:
-            import ctypes
-            # Set DPI Awareness (Windows 10 and 8)
-            errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(2)
-            logger.info(f'SetProcessDpiAwareness {errorCode}')
-            if self.debug:
-                import win32api
-                win32api.SetConsoleCtrlHandler(self.console_handler, True)
-        except Exception as e:
-            logger.error(f'SetProcessDpiAwareness error', e)
+        if sys.platform == 'win32':
+            try:
+                import ctypes
+                # Set DPI Awareness (Windows 10 and 8)
+                errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(2)
+                logger.info(f'SetProcessDpiAwareness {errorCode}')
+                if self.debug:
+                    import win32api
+                    win32api.SetConsoleCtrlHandler(self.console_handler, True)
+            except Exception as e:
+                logger.error(f'SetProcessDpiAwareness error', e)
         self.config = config
         try:
             self.do_init()

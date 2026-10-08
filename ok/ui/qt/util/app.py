@@ -15,12 +15,20 @@ def init_app_config():
     logger.debug(
         f'resources.qt_resource_name {resources.qt_resource_name} cfg.themeMode')
 
-    app = QApplication(sys.argv)
-    app.setHighDpiScaleFactorRoundingPolicy(
-        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-    app.setAttribute(Qt.AA_EnableHighDpiScaling)
-    app.setAttribute(Qt.AA_UseHighDpiPixmaps)
-    app.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings)
+    app = QApplication.instance()
+    if app is None:
+        try:
+            QApplication.setHighDpiScaleFactorRoundingPolicy(
+                Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+        except Exception:
+            pass
+        app = QApplication(sys.argv)
+        try:
+            app.setAttribute(Qt.AA_EnableHighDpiScaling)
+            app.setAttribute(Qt.AA_UseHighDpiPixmaps)
+            app.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings)
+        except Exception:
+            pass
 
     locale = cfg.get(cfg.language).value
     translator = FluentTranslator(locale)
