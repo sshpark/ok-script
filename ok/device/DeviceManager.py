@@ -317,7 +317,7 @@ class DeviceManager:
 
     def update_mac_device(self):
         """Update macOS device info. Equivalent of update_pc_device for macOS."""
-        if getattr(self, 'mac_config', None) is None or getattr(self, 'mac_window', None) is None:
+        if sys.platform != 'darwin' or getattr(self, 'mac_config', None) is None or getattr(self, 'mac_window', None) is None:
             return None
 
         nick = "Wuthering Waves"
@@ -361,7 +361,8 @@ class DeviceManager:
         try:
             self.refresh_emulators(current)
             self.refresh_phones(current)
-            self.update_pc_device()
+            if sys.platform != 'darwin':
+                self.update_pc_device()
             self.update_mac_device()
             self.update_browser_device()
         except Exception as e:
@@ -735,10 +736,11 @@ class DeviceManager:
                              hwnd_class=self.windows_capture_config.get('hwnd_class'),
                              top_hwnd_class=self.windows_capture_config.get('top_hwnd_class'))
             self.use_windows_capture()
-            if not isinstance(self.interaction, self.win_interaction_class):
-                self.interaction = self.win_interaction_class(self.capture_method, self.hwnd_window)
-            elif self.interaction:
-                self.interaction.capture = self.capture_method
+            if self.win_interaction_class:
+                if not isinstance(self.interaction, self.win_interaction_class):
+                    self.interaction = self.win_interaction_class(self.capture_method, self.hwnd_window)
+                elif self.interaction:
+                    self.interaction.capture = self.capture_method
             preferred['connected'] = self.capture_method is not None and self.capture_method.connected()
         elif preferred['device'] == 'macos':
             if getattr(self, 'mac_window', None) is None:

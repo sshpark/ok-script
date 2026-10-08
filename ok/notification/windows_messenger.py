@@ -2,15 +2,27 @@ import io
 import time
 import ctypes
 
+import sys
+
 import cv2
 import numpy as np
 import psutil
-import win32api
-import win32clipboard
-import win32con
-import win32gui
-import win32process
-import win32ui
+
+try:
+    import win32api
+    import win32clipboard
+    import win32con
+    import win32gui
+    import win32process
+    import win32ui
+except ImportError:
+    win32api = None
+    win32clipboard = None
+    win32con = None
+    win32gui = None
+    win32process = None
+    win32ui = None
+
 from PIL import Image
 
 from ok.util.logger import Logger
