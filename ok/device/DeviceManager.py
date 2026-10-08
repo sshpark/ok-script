@@ -315,6 +315,58 @@ class DeviceManager:
             self._replace_pc_devices({imei: pc_device})
             return imei
 
+    def get_mac_app_path(self):
+        """Find the macOS game application bundle path."""
+        if sys.platform != 'darwin':
+            return None
+
+        if self.mac_config:
+            custom_path = self.mac_config.get('app_path')
+            if custom_path and os.path.exists(custom_path):
+                return custom_path
+
+        # 1. Check bundle identifiers via NSWorkspace
+        try:
+            from AppKit import NSWorkspace
+            ws = NSWorkspace.sharedWorkspace()
+            bundle_ids = (self.mac_config.get('bundle_id') if self.mac_config else None) or [
+                'com.kurogame.mingchao',
+                'com.kurogame.wutheringwaves',
+                'com.kurogame.wutheringwaves.global',
+            ]
+            if isinstance(bundle_ids, str):
+                bundle_ids = [bundle_ids]
+            for bid in bundle_ids:
+                url = ws.URLForApplicationWithBundleIdentifier_(bid)
+                if url and url.path() and os.path.exists(url.path()):
+                    return url.path()
+        except Exception as e:
+            logger.debug(f'get_mac_app_path NSWorkspace check failed: {e}')
+
+        # 2. Check standard installation locations
+        candidates = [
+            '/Applications/鸣潮.app',
+            '/Applications/Wuthering Waves.app',
+            '/Applications/鳴潮.app',
+            os.path.expanduser('~/Applications/鸣潮.app'),
+            os.path.expanduser('~/Applications/Wuthering Waves.app'),
+            os.path.expanduser('~/Applications/鳴潮.app'),
+        ]
+        if self.mac_config and self.mac_config.get('exe'):
+            exes = self.mac_config['exe']
+            if isinstance(exes, str):
+                exes = [exes]
+            for exe in exes:
+                if exe.endswith('.app'):
+                    candidates.insert(0, f'/Applications/{exe}')
+                    candidates.insert(0, os.path.expanduser(f'~/Applications/{exe}'))
+
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+
+        return None
+
     def update_mac_device(self):
         """Update macOS device info. Equivalent of update_pc_device for macOS."""
         if sys.platform != 'darwin' or getattr(self, 'mac_config', None) is None or getattr(self, 'mac_window', None) is None:
@@ -322,18 +374,21 @@ class DeviceManager:
 
         nick = "Wuthering Waves"
         if self.mac_config and self.mac_config.get('title'):
-            nick = self.mac_config.get('title')
+            t = self.mac_config.get('title')
+            nick = t[0] if isinstance(t, list) and t else (t if isinstance(t, str) else nick)
         if self.mac_window.exists:
             nick = self.mac_window.title or nick
 
         imei = "mac"
+        app_path = self.get_mac_app_path()
         mac_device = {"address": "", "imei": imei, "device": "macos",
                       "model": "", "nick": nick,
                       "width": self.mac_window.width,
                       "height": self.mac_window.height,
                       "capture": "macos",
                       "connected": self.mac_window.exists,
-                      "resolution": f"{self.mac_window.width}x{self.mac_window.height}"
+                      "resolution": f"{self.mac_window.width}x{self.mac_window.height}",
+                      "full_path": app_path,
                       }
         logger.info(f'update_mac_device mac_device: {mac_device}')
         self.device_dict[imei] = mac_device
@@ -895,6 +950,8 @@ class DeviceManager:
                 logger.error(f'device_connected error occurred, {e}')
 
     def get_exe_path(self, device):
+        if device.get('device') == 'macos':
+            return device.get('full_path') or self.get_mac_app_path()
         path = device.get('full_path')
         if device.get(
                 'device') == 'windows' and self.windows_capture_config:

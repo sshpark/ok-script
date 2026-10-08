@@ -265,5 +265,64 @@ class TestMacTitleBar(unittest.TestCase):
             added_item = view.addItem.call_args[0][0]
             self.assertEqual(added_item.text(), "Mac原生交互")
 
+    def test_find_game_window_chinese_and_process_names(self):
+        import threading
+        from ok.device.capture_methods.mac_window import MacWindow
+        exit_event = threading.Event()
+        window = MacWindow(exit_event=exit_event, title="Wuthering Waves", exe_names=["Wuthering Waves.app"])
+
+        sample_windows = [
+            {'kCGWindowNumber': 101, 'kCGWindowOwnerName': '鸣潮', 'kCGWindowName': '',
+             'kCGWindowBounds': {'X': 0, 'Y': 0, 'Width': 1920, 'Height': 1080}},
+            {'kCGWindowNumber': 102, 'kCGWindowOwnerName': 'Client-Mac-Shipping', 'kCGWindowName': 'Main',
+             'kCGWindowBounds': {'X': 0, 'Y': 0, 'Width': 1920, 'Height': 1080}},
+            {'kCGWindowNumber': 103, 'kCGWindowOwnerName': 'SystemUIServer', 'kCGWindowName': '',
+             'kCGWindowBounds': {'X': 0, 'Y': 0, 'Width': 30, 'Height': 30}},
+        ]
+
+        with patch('ok.device.capture_methods.mac_window.Quartz.CGWindowListCopyWindowInfo', return_value=sample_windows):
+            wid, bounds, owner = window._find_game_window()
+            self.assertEqual(wid, 101)
+            self.assertEqual(owner, '鸣潮')
+
+    def test_device_manager_get_mac_app_path(self):
+        from ok.device.DeviceManager import DeviceManager
+        dm = DeviceManager.__new__(DeviceManager)
+        dm.mac_config = {'bundle_id': ['com.kurogame.mingchao']}
+
+        with patch('os.path.exists', side_effect=lambda p: p == '/Applications/鸣潮.app'):
+            app_path = dm.get_mac_app_path()
+            self.assertEqual(app_path, '/Applications/鸣潮.app')
+
+    def test_device_manager_get_exe_path_macos(self):
+        from ok.device.DeviceManager import DeviceManager
+        dm = DeviceManager.__new__(DeviceManager)
+        dm.get_mac_app_path = Mock(return_value='/Applications/鸣潮.app')
+        device = {'device': 'macos', 'full_path': '/Applications/鸣潮.app'}
+        self.assertEqual(dm.get_exe_path(device), '/Applications/鸣潮.app')
+
+    def test_process_execute_macos(self):
+        from ok.util.process import execute
+        with patch('sys.platform', 'darwin'), \
+             patch('os.path.exists', return_value=True), \
+             patch('subprocess.Popen') as mock_popen:
+            success = execute('/Applications/鸣潮.app')
+            self.assertTrue(success)
+            mock_popen.assert_called_once_with(['open', '/Applications/鸣潮.app'])
+
+    def test_start_controller_check_mac_permissions(self):
+        from ok.core.start_controller import StartController
+        sc = StartController.__new__(StartController)
+        sc.tr = lambda s: s
+
+        mock_quartz = Mock()
+        mock_quartz.CGPreflightScreenCaptureAccess.return_value = False
+
+        with patch('sys.platform', 'darwin'), \
+             patch.dict('sys.modules', {'Quartz': mock_quartz}):
+            err = sc.check_mac_permissions(request=True)
+            self.assertIn("Screen Recording permission is required", err)
+            mock_quartz.CGRequestScreenCaptureAccess.assert_called_once()
+
 
 

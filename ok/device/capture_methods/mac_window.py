@@ -170,6 +170,9 @@ class MacWindow:
             if logger:
                 logger.error(f"MacWindow do_update_window_size exception", e)
 
+    KNOWN_GAME_KEYWORDS = ('wuthering', 'kuro', '鸣潮', '鳴潮', 'client-mac-shipping', 'mingchao')
+    KNOWN_BUNDLE_KEYWORDS = ('wutheringwaves', 'mingchao', 'kurogame')
+
     def _find_game_window(self):
         """
         Find the Wuthering Waves window using CGWindowListCopyWindowInfo.
@@ -188,34 +191,57 @@ class MacWindow:
                 logger.error(f"MacWindow find window error", e)
             return None, None, None
 
+        titles = [self.title] if isinstance(self.title, str) else (self.title or [])
+        exe_patterns = [self.exe_names] if isinstance(self.exe_names, str) else (self.exe_names or [])
+
         candidates = []
         for w in window_list:
-            owner = w.get('kCGWindowOwnerName', '') or ''
-            name = w.get('kCGWindowName', '') or ''
+            owner = (w.get('kCGWindowOwnerName') or '').strip()
+            name = (w.get('kCGWindowName') or '').strip()
+            owner_lower = owner.lower()
+            name_lower = name.lower()
 
-            # Match by title if specified
-            if self.title and self.title.lower() in owner.lower():
-                candidates.append(w)
-                continue
-
-            # Match by process name
-            exe_patterns = self.exe_names or []
-            for pattern in exe_patterns:
-                if pattern.lower() in owner.lower() or pattern.lower() in name.lower():
-                    candidates.append(w)
+            matched = False
+            # 1. Match by explicit title(s)
+            for t in titles:
+                t_lower = t.lower()
+                if t_lower and (t_lower in owner_lower or t_lower in name_lower):
+                    matched = True
                     break
-            else:
-                # Fallback: match by well-known game names
-                if 'wuthering' in owner.lower() or 'wuthering' in name.lower():
-                    candidates.append(w)
-                elif 'kuro' in owner.lower():
-                    candidates.append(w)
+
+            # 2. Match by explicit process / pattern(s)
+            if not matched:
+                for p in exe_patterns:
+                    p_lower = p.lower()
+                    p_base = p_lower[:-4] if p_lower.endswith('.app') else p_lower
+                    if p_lower in owner_lower or p_lower in name_lower or p_base in owner_lower or p_base in name_lower:
+                        matched = True
+                        break
+
+            # 3. Fallback: match by known game keywords
+            if not matched:
+                for kw in self.KNOWN_GAME_KEYWORDS:
+                    if kw in owner_lower or kw in name_lower:
+                        matched = True
+                        break
+
+            if matched:
+                candidates.append(w)
 
         if not candidates:
             return None, None, None
 
+        # Filter out auxiliary/status bar/tiny windows
+        valid_candidates = [
+            w for w in candidates
+            if (w.get('kCGWindowBounds', {}).get('Width', 0) or 0) >= 200
+            and (w.get('kCGWindowBounds', {}).get('Height', 0) or 0) >= 200
+        ]
+        if not valid_candidates:
+            valid_candidates = candidates
+
         # Pick the largest window (the game window)
-        best = max(candidates, key=lambda w: (
+        best = max(valid_candidates, key=lambda w: (
             w.get('kCGWindowBounds', {}).get('Width', 0) or 0
         ) * (w.get('kCGWindowBounds', {}).get('Height', 0) or 0))
 
@@ -238,8 +264,10 @@ class MacWindow:
         try:
             ws = NSWorkspace.sharedWorkspace()
             for app in ws.runningApplications():
-                app_name = app.localizedName() or ''
-                if 'wuthering' in app_name.lower() or 'kuro' in app_name.lower():
+                app_name = (app.localizedName() or '').lower()
+                bundle_id = (app.bundleIdentifier() or '').lower()
+                if (any(k in app_name for k in self.KNOWN_GAME_KEYWORDS) or
+                        any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS)):
                     app.activateWithOptions_(
                         NSApplication.NSApplicationActivateIgnoringOtherApps
                     )
@@ -266,7 +294,9 @@ class MacWindow:
                 front_app = NSWorkspace.sharedWorkspace().frontmostApplication()
                 if front_app:
                     name = (front_app.localizedName() or '').lower()
-                    return 'wuthering' in name or 'kuro' in name
+                    bundle_id = (front_app.bundleIdentifier() or '').lower()
+                    return (any(k in name for k in self.KNOWN_GAME_KEYWORDS) or
+                            any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS))
             except Exception as e:
                 if logger:
                     logger.error(f"MacWindow is_foreground fallback error", e)
@@ -292,7 +322,9 @@ class MacWindow:
                 front_app = NSWorkspace.sharedWorkspace().frontmostApplication()
                 if front_app:
                     name = (front_app.localizedName() or '').lower()
-                    return 'wuthering' in name or 'kuro' in name
+                    bundle_id = (front_app.bundleIdentifier() or '').lower()
+                    return (any(k in name for k in self.KNOWN_GAME_KEYWORDS) or
+                            any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS))
         except Exception as e:
             if logger:
                 logger.error(f"MacWindow is_foreground frontmost fallback error", e)
@@ -314,7 +346,9 @@ class MacWindow:
             front_app = NSWorkspace.sharedWorkspace().frontmostApplication()
             if front_app:
                 name = (front_app.localizedName() or '').lower()
-                return 'wuthering' in name or 'kuro' in name
+                bundle_id = (front_app.bundleIdentifier() or '').lower()
+                return (any(k in name for k in self.KNOWN_GAME_KEYWORDS) or
+                        any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS))
         except Exception as e:
             if logger:
                 logger.error(f"MacWindow is_frontmost error", e)

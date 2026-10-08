@@ -840,6 +840,14 @@
             <source>GPU Driver Warning</source>
             <translation>GPU 驅動警告</translation>
         </message>
+        <message>
+            <source>Screen Recording permission is required. Please grant permission in System Settings -&gt; Privacy &amp; Security -&gt; Screen Recording and restart the app.</source>
+            <translation>macOS 需要【螢幕錄製】權限以捕獲遊戲畫面，請在 系統設定 -&gt; 隱私權與安全性 -&gt; 螢幕錄製 中授權後重啟應用程式。</translation>
+        </message>
+        <message>
+            <source>Accessibility permission is required. Please grant permission in System Settings -&gt; Privacy &amp; Security -&gt; Accessibility.</source>
+            <translation>macOS 需要【輔助功能】權限以模擬按鍵和滑鼠，請在 系統設定 -&gt; 隱私權與安全性 -&gt; 輔助功能 中授權。</translation>
+        </message>
     </context>
     <context>
         <name>StartLoadingDialog</name>

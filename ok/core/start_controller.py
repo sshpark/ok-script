@@ -151,11 +151,11 @@ class StartController:
         min_width, min_height = self.STARTED_WINDOW_MIN_SIZE
 
         while not self.exit_event.is_set():
-            hwnd_window = getattr(og.device_manager, 'hwnd_window', None)
-            if hwnd_window is not None:
-                hwnd_window.do_update_window_size()
-                size = (hwnd_window.width, hwnd_window.height)
-                if hwnd_window.hwnd and size[0] >= min_width and size[1] >= min_height:
+            window = getattr(og.device_manager, 'mac_window', None) or getattr(og.device_manager, 'hwnd_window', None)
+            if window is not None:
+                window.do_update_window_size()
+                size = (window.width, window.height)
+                if window.hwnd and size[0] >= min_width and size[1] >= min_height:
                     now = time.monotonic()
                     if size != stable_size:
                         logger.info(f'waiting for started window to stabilize, current size {size[0]}x{size[1]}')
@@ -202,7 +202,7 @@ class StartController:
                 if not execute(path, arguments=args, start_method=self.start_method):
                     communicate.starting_emulator.emit(True, self.tr("Start game failed, please start game first"), 0)
                     return False
-                if device['device'] == "windows" and not self._wait_until_started_window_stable():
+                if device['device'] in ("windows", "macos") and not self._wait_until_started_window_stable():
                     return False
                 if not self._wait_until_device_ready():
                     return False
@@ -287,6 +287,31 @@ class StartController:
         elif error:
             alert_error(error, tray=True)
 
+    def check_mac_permissions(self, request=True):
+        import sys
+        if sys.platform != 'darwin':
+            return None
+        try:
+            import Quartz
+            if hasattr(Quartz, 'CGPreflightScreenCaptureAccess'):
+                if not Quartz.CGPreflightScreenCaptureAccess():
+                    if request:
+                        Quartz.CGRequestScreenCaptureAccess()
+                    return self.tr("Screen Recording permission is required. Please grant permission in System Settings -> Privacy & Security -> Screen Recording and restart the app.")
+        except Exception:
+            pass
+
+        try:
+            from ApplicationServices import AXIsProcessTrusted, AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
+            if not AXIsProcessTrusted():
+                if request:
+                    AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
+                return self.tr("Accessibility permission is required. Please grant permission in System Settings -> Privacy & Security -> Accessibility.")
+        except Exception:
+            pass
+
+        return None
+
     def check_device_error(self):
         try:
             device = og.device_manager.get_preferred_device()
@@ -306,6 +331,10 @@ class StartController:
                 og.device_manager.capture_method.start_browser()
             if not og.device_manager.capture_method.connected():
                 logger.error(f'Game window is not connected {og.device_manager.capture_method}')
+                if device and device.get('device') == 'macos':
+                    perm_err = self.check_mac_permissions(request=True)
+                    if perm_err:
+                        return perm_err
                 return error_msg
             if isinstance(og.device_manager.capture_method, BaseWindowsCaptureMethod):
 
@@ -323,6 +352,10 @@ class StartController:
             frame = self.try_capture_a_frame()
             if frame is None:
                 logger.error(f'check_device_error: try_capture_a_frame returned None')
+                if device and device.get('device') == 'macos':
+                    perm_err = self.check_mac_permissions(request=True)
+                    if perm_err:
+                        return perm_err
                 return self.tr('Capture failed, please check game window')
             logger.info(f'check_device_error: capturing frame {frame.shape[1], frame.shape[0]}')
             if og.executor.feature_set is not None:

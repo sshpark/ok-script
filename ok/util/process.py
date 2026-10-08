@@ -418,7 +418,10 @@ def execute(game_cmd: str, arguments=None, start_method=WINDOWS_START_METHOD_STA
         if '://' in game_cmd:
             try:
                 logger.info(f'try execute url {game_cmd}')
-                os.startfile(game_cmd)
+                if sys.platform == 'darwin':
+                    subprocess.Popen(['open', game_cmd])
+                else:
+                    os.startfile(game_cmd)
                 return True
             except Exception as e:
                 logger.error('execute error', e)
@@ -427,6 +430,14 @@ def execute(game_cmd: str, arguments=None, start_method=WINDOWS_START_METHOD_STA
             if os.path.exists(game_path):
                 try:
                     logger.info(f'try execute {game_cmd} {arguments} with {start_method}')
+                    if game_path.endswith('.app') or (sys.platform == 'darwin' and not game_path.endswith('.exe') and '\\' not in game_path):
+                        cmd = ['open', game_path]
+                        if arguments:
+                            args_part = arguments.split() if isinstance(arguments, str) else list(arguments)
+                            cmd += ['--args'] + args_part
+                        subprocess.Popen(cmd)
+                        return True
+
                     import ntpath
                     working_dir = ntpath.dirname(game_path) if '\\' in game_path else os.path.dirname(game_path)
 
