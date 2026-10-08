@@ -720,6 +720,31 @@ def create_shortcut(exe_path=None, shortcut_name_post=None, description=None, ta
     return shortcut_path
 
 
+_caffeinate_proc = None
+
+
 def prevent_sleeping(yes=True):
-    # Prevent the system from sleeping
-    ctypes.windll.kernel32.SetThreadExecutionState(0x80000002 if yes else 0x80000000)
+    if sys.platform == 'win32':
+        try:
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000002 if yes else 0x80000000)
+        except Exception as e:
+            logger.debug(f"SetThreadExecutionState failed: {e}")
+    elif sys.platform == 'darwin':
+        global _caffeinate_proc
+        if yes:
+            if _caffeinate_proc is None or _caffeinate_proc.poll() is not None:
+                try:
+                    import subprocess
+                    _caffeinate_proc = subprocess.Popen(
+                        ['caffeinate', '-d', '-i', '-s', '-w', str(os.getpid())],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    )
+                except Exception as e:
+                    logger.debug(f'caffeinate failed: {e}')
+        else:
+            if _caffeinate_proc is not None:
+                try:
+                    _caffeinate_proc.terminate()
+                except Exception:
+                    pass
+                _caffeinate_proc = None
