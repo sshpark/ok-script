@@ -321,9 +321,49 @@ class TestMacTitleBar(unittest.TestCase):
 
         with patch('sys.platform', 'darwin'), \
              patch.dict('sys.modules', {'Quartz': mock_quartz}):
+            # Passive check (request=False) should not prompt
+            err_passive = sc.check_mac_permissions(request=False)
+            self.assertIn("屏幕录制权限", err_passive)
+            mock_quartz.CGRequestScreenCaptureAccess.assert_not_called()
+
+            # Active check (request=True) prompts once
             err = sc.check_mac_permissions(request=True)
-            self.assertIn("Screen Recording permission is required", err)
+            self.assertIn("屏幕录制权限", err)
             mock_quartz.CGRequestScreenCaptureAccess.assert_called_once()
+
+            # Subsequent active check should NOT prompt again
+            err2 = sc.check_mac_permissions(request=True)
+            self.assertIn("屏幕录制权限", err2)
+            mock_quartz.CGRequestScreenCaptureAccess.assert_called_once()
+
+    def test_start_controller_check_mac_accessibility_permissions(self):
+        from ok.core.start_controller import StartController
+        sc = StartController.__new__(StartController)
+        sc.tr = lambda s: s
+
+        mock_quartz = Mock()
+        mock_quartz.CGPreflightScreenCaptureAccess.return_value = True
+
+        mock_as = Mock()
+        mock_as.AXIsProcessTrusted.return_value = False
+        mock_as.kAXTrustedCheckOptionPrompt = 'AXTrustedCheckOptionPrompt'
+
+        with patch('sys.platform', 'darwin'), \
+             patch.dict('sys.modules', {'Quartz': mock_quartz, 'ApplicationServices': mock_as}):
+            # Passive check should not prompt
+            err_passive = sc.check_mac_permissions(request=False)
+            self.assertIn("辅助功能权限", err_passive)
+            mock_as.AXIsProcessTrustedWithOptions.assert_not_called()
+
+            # Active check should prompt once
+            err = sc.check_mac_permissions(request=True)
+            self.assertIn("辅助功能权限", err)
+            mock_as.AXIsProcessTrustedWithOptions.assert_called_once()
+
+            # Subsequent check should not prompt again
+            err2 = sc.check_mac_permissions(request=True)
+            self.assertIn("辅助功能权限", err2)
+            mock_as.AXIsProcessTrustedWithOptions.assert_called_once()
 
     def test_capture_method_placeholders_safe_for_isinstance(self):
         from ok.device.capture import BrowserCaptureMethod, BitBltCaptureMethod, DesktopDuplicationCaptureMethod

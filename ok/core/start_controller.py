@@ -92,6 +92,14 @@ class StartController:
             communicate.starting_emulator.emit(True, self.tr(str(e)), 0)
             return False
 
+        device = og.device_manager.get_preferred_device()
+        if device and device.get('device') == 'macos':
+            perm_err = self.check_mac_permissions(request=True)
+            if perm_err:
+                logger.error(f'macOS permissions missing before start: {perm_err}')
+                communicate.starting_emulator.emit(True, perm_err, 0)
+                return False
+
         try:
             if self.start_exe:
                 if not self.start_device(initial_refresh_done=True):
@@ -135,6 +143,11 @@ class StartController:
             error = self.check_device_error()
             if error is None:
                 return True
+            import sys
+            if sys.platform == 'darwin' and self.check_mac_permissions(request=False):
+                logger.error(f'macOS permissions missing during wait: {error}')
+                communicate.starting_emulator.emit(True, error, 0)
+                return False
             logger.error(f'waiting for game to start error {error}')
             remaining_time = wait_until - time.time()
             if remaining_time <= 0:
@@ -298,15 +311,14 @@ class StartController:
             import Quartz
             if hasattr(Quartz, 'CGPreflightScreenCaptureAccess'):
                 if not Quartz.CGPreflightScreenCaptureAccess():
-                    if request:
+                    if request and not getattr(self, '_mac_screen_perm_prompted', False):
+                        self._mac_screen_perm_prompted = True
                         Quartz.CGRequestScreenCaptureAccess()
-                        if not getattr(self, '_mac_screen_perm_prompted', False):
-                            self._mac_screen_perm_prompted = True
-                            try:
-                                import subprocess
-                                subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'])
-                            except Exception:
-                                pass
+                        try:
+                            import subprocess
+                            subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'])
+                        except Exception:
+                            pass
                     return self.tr("需要屏幕录制权限来捕获游戏画面。请在「系统设置 > 隐私与安全性 > 屏幕录制」中勾选允许，并重新启动应用。\n(Screen Recording permission is required. Please grant permission in System Settings -> Privacy & Security -> Screen Recording and restart the app.)")
         except Exception:
             pass
@@ -314,15 +326,14 @@ class StartController:
         try:
             from ApplicationServices import AXIsProcessTrusted, AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt
             if not AXIsProcessTrusted():
-                if request:
+                if request and not getattr(self, '_mac_ax_perm_prompted', False):
+                    self._mac_ax_perm_prompted = True
                     AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
-                    if not getattr(self, '_mac_ax_perm_prompted', False):
-                        self._mac_ax_perm_prompted = True
-                        try:
-                            import subprocess
-                            subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'])
-                        except Exception:
-                            pass
+                    try:
+                        import subprocess
+                        subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'])
+                    except Exception:
+                        pass
                 return self.tr("需要辅助功能权限来模拟键盘/鼠标操作。请在「系统设置 > 隐私与安全性 > 辅助功能」中勾选允许。\n(Accessibility permission is required. Please grant permission in System Settings -> Privacy & Security -> Accessibility.)")
         except Exception:
             pass
@@ -338,7 +349,7 @@ class StartController:
             if not device:
                 return self.tr('No game selected!')
             if device and device.get('device') == 'macos':
-                perm_err = self.check_mac_permissions(request=True)
+                perm_err = self.check_mac_permissions(request=False)
                 if perm_err:
                     return perm_err
             if og.device_manager.capture_method is None:
@@ -354,7 +365,7 @@ class StartController:
             if not og.device_manager.capture_method.connected():
                 logger.error(f'Game window is not connected {og.device_manager.capture_method}')
                 if device and device.get('device') == 'macos':
-                    perm_err = self.check_mac_permissions(request=True)
+                    perm_err = self.check_mac_permissions(request=False)
                     if perm_err:
                         return perm_err
                 return error_msg
@@ -375,7 +386,7 @@ class StartController:
             if frame is None:
                 logger.error(f'check_device_error: try_capture_a_frame returned None')
                 if device and device.get('device') == 'macos':
-                    perm_err = self.check_mac_permissions(request=True)
+                    perm_err = self.check_mac_permissions(request=False)
                     if perm_err:
                         return perm_err
                 return self.tr('Capture failed, please check game window')
