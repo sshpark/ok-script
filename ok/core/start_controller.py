@@ -300,7 +300,14 @@ class StartController:
                 if not Quartz.CGPreflightScreenCaptureAccess():
                     if request:
                         Quartz.CGRequestScreenCaptureAccess()
-                    return self.tr("Screen Recording permission is required. Please grant permission in System Settings -> Privacy & Security -> Screen Recording and restart the app.")
+                        if not getattr(self, '_mac_screen_perm_prompted', False):
+                            self._mac_screen_perm_prompted = True
+                            try:
+                                import subprocess
+                                subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'])
+                            except Exception:
+                                pass
+                    return self.tr("需要屏幕录制权限来捕获游戏画面。请在「系统设置 > 隐私与安全性 > 屏幕录制」中勾选允许，并重新启动应用。\n(Screen Recording permission is required. Please grant permission in System Settings -> Privacy & Security -> Screen Recording and restart the app.)")
         except Exception:
             pass
 
@@ -309,7 +316,14 @@ class StartController:
             if not AXIsProcessTrusted():
                 if request:
                     AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
-                return self.tr("Accessibility permission is required. Please grant permission in System Settings -> Privacy & Security -> Accessibility.")
+                    if not getattr(self, '_mac_ax_perm_prompted', False):
+                        self._mac_ax_perm_prompted = True
+                        try:
+                            import subprocess
+                            subprocess.Popen(['open', 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'])
+                        except Exception:
+                            pass
+                return self.tr("需要辅助功能权限来模拟键盘/鼠标操作。请在「系统设置 > 隐私与安全性 > 辅助功能」中勾选允许。\n(Accessibility permission is required. Please grant permission in System Settings -> Privacy & Security -> Accessibility.)")
         except Exception:
             pass
 

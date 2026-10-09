@@ -32,6 +32,12 @@ class MacWindow:
     KNOWN_GAME_KEYWORDS = ('wuthering', 'kuro', '鸣潮', '鳴潮', 'client-mac-shipping', 'mingchao')
     KNOWN_BUNDLE_KEYWORDS = ('wutheringwaves', 'mingchao', 'kurogame')
     HELPER_KEYWORDS = ('助手', 'ok-ww', 'ok-wuthering-waves', 'ok-script', 'assistant')
+    IGNORED_OWNER_NAMES = (
+        'antigravity', 'cursor', 'code', 'vscodium', 'pycharm', 'sublime',
+        'terminal', 'iterm', 'google chrome', 'chrome', 'safari', 'firefox',
+        'microsoft edge', 'finder', '访达', '程序坞', 'dock', 'window server',
+        '系统设置', 'system settings', 'tencent lemon', 'wechat', '微信',
+    )
 
     def __init__(self, exit_event, title=None, exe_names=None, frame_width=0, frame_height=0,
                  player_id=-1, global_config=None, device_manager=None):
@@ -216,6 +222,9 @@ class MacWindow:
             name_lower = name.lower()
 
             if any(hk in owner_lower or hk in name_lower for hk in self.HELPER_KEYWORDS):
+                continue
+
+            if any(ig in owner_lower for ig in self.IGNORED_OWNER_NAMES):
                 continue
 
             matched = False

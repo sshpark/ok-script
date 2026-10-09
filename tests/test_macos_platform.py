@@ -71,11 +71,12 @@ class TestMacCapture(unittest.TestCase):
 class TestMacWindow(unittest.TestCase):
     def test_mac_window_initialization(self):
         exit_event = Mock()
-        window = MacWindow(exit_event, title="Wuthering Waves")
-        self.assertEqual(window.title, "Wuthering Waves")
-        self.assertEqual(window.hwnd, 0)
-        self.assertFalse(window.exists)
-        self.assertEqual(window.scaling, 1.0)
+        with patch('Quartz.CGWindowListCopyWindowInfo', return_value=[]):
+            window = MacWindow(exit_event, title="Wuthering Waves")
+            self.assertEqual(window.title, "Wuthering Waves")
+            self.assertEqual(window.hwnd, 0)
+            self.assertFalse(window.exists)
+            self.assertEqual(window.scaling, 1.0)
 
     def test_mac_window_get_abs_cords(self):
         exit_event = Mock()
