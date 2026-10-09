@@ -168,8 +168,12 @@ class UpdateCard(QWidget):
                 logger.info(f"{operation_name} result={result!r}")
                 signal.emit((True, result))
             except Exception as error:
-                logger.error(f"{operation_name} failed: {error}", error)
-                signal.emit((False, str(error)))
+                if "pyappify_version: None" in str(error):
+                    logger.debug(f"{operation_name} skipped: {error}")
+                    signal.emit((False, self.tr("Update checking is not supported for this build.")))
+                else:
+                    logger.error(f"{operation_name} failed: {error}", error)
+                    signal.emit((False, str(error)))
 
         threading.Thread(target=run, daemon=True, name="pyappify-update").start()
 

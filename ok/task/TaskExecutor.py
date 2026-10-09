@@ -116,8 +116,11 @@ class TaskExecutor:
             self.ocr_po_translation = get_ocr_translations(locale_name)
             self.ocr_po_translation.install()
             logger.info(f'translation ocr installed for {locale_name}')
-        except:
-            logger.info(f'install ocr translations error for {locale_name}')
+        except FileNotFoundError:
+            logger.debug(f'no ocr translations found for {locale_name}')
+            self.ocr_po_translation = None
+        except Exception as e:
+            logger.debug(f'install ocr translations skipped for {locale_name}: {e}')
             self.ocr_po_translation = None
 
     @property
@@ -188,10 +191,21 @@ class TaskExecutor:
         elif lib == 'onnxocr':
             from onnxocr.onnx_paddleocr import ONNXPaddleOcr
             logger.info(f'init onnxocr {config_params}')
-            ocr_lib = ONNXPaddleOcr(use_angle_cls=False,
-                                    logger=logger,
-                                    use_npu=config_params.get('use_npu', True),
-                                    use_openvino=config_params.get('use_openvino', False))
+            use_openvino = config_params.get('use_openvino', False)
+            try:
+                ocr_lib = ONNXPaddleOcr(use_angle_cls=False,
+                                        logger=logger,
+                                        use_npu=config_params.get('use_npu', True),
+                                        use_openvino=use_openvino)
+            except Exception as e:
+                if use_openvino:
+                    logger.warning(f'init onnxocr with openvino failed ({e}), falling back without openvino')
+                    ocr_lib = ONNXPaddleOcr(use_angle_cls=False,
+                                            logger=logger,
+                                            use_npu=config_params.get('use_npu', True),
+                                            use_openvino=False)
+                else:
+                    raise
         elif lib == 'rapidocr':
             from rapidocr import RapidOCR
             params = {"Global.use_cls": False, "Global.max_side_len": 100000, "Global.min_side_len": 0,

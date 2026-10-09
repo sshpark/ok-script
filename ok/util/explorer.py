@@ -42,8 +42,31 @@ def _open_or_focus(folder, item_name=None, item_path=None):
         f'item_path={str(item_path) if item_path is not None else None!r}, '
         f'platform={sys.platform!r}'
     )
+    if sys.platform == 'darwin':
+        import subprocess
+        try:
+            if item_path is not None and Path(item_path).exists():
+                logger.info(f'Finder revealing item: {item_path}')
+                subprocess.Popen(['open', '-R', str(item_path)])
+            else:
+                logger.info(f'Finder opening folder: {folder}')
+                subprocess.Popen(['open', str(folder)])
+            return True
+        except Exception as e:
+            logger.error(f'Failed to open Finder on macOS: {e}')
+            return False
+    elif sys.platform.startswith('linux'):
+        import subprocess
+        try:
+            logger.info(f'xdg-open opening folder: {folder}')
+            subprocess.Popen(['xdg-open', str(folder)])
+            return True
+        except Exception as e:
+            logger.error(f'Failed to open folder on Linux: {e}')
+            return False
+
     if sys.platform != 'win32':
-        logger.warning('Windows Explorer is only available on Windows')
+        logger.warning('Explorer is only available on Windows/macOS/Linux')
         return False
 
     if _focus_existing_explorer_window(folder, item_name):

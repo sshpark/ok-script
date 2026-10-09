@@ -14,6 +14,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -355,6 +356,9 @@ class WindowsScheduleManager:
 
     def _init_com_service(self):
         """初始化 COM 服务"""
+        if sys.platform != 'win32':
+            self.SCHEDULE_SERVICE = None
+            return
         logger.info(f"Initializing Windows Task Scheduler COM service, root={self.SCHEDULE_ROOT_PATH}")
         try:
             import win32com.client
@@ -419,8 +423,10 @@ class WindowsScheduleManager:
             try:
                 if self.is_com_available():
                     tasks = self._query_tasks_via_com()
-                else:
+                elif sys.platform == 'win32':
                     tasks = self._query_tasks_via_schtasks()
+                else:
+                    tasks = []
             except Exception as e:
                 logger.error(f"Failed to query tasks: {e}")
                 # 降级到缓存
@@ -610,6 +616,8 @@ class WindowsScheduleManager:
 
     def _query_tasks_via_schtasks(self) -> List[ScheduleTaskInfo]:
         """通过 schtasks 命令查询任务（降级方案）"""
+        if sys.platform != 'win32':
+            return []
         tasks = []
         try:
             # 使用 CSV 格式输出
@@ -1026,6 +1034,8 @@ class WindowsScheduleManager:
                                   description: str = "",
                                   task_identifier: Optional[str] = None) -> bool:
         """通过 schtasks 命令创建任务（降级方案）"""
+        if sys.platform != 'win32':
+            return False
         try:
             xml_config = self._generate_task_xml(
                 task_name, task_index, trigger_type, timeout_hours,
@@ -1100,6 +1110,9 @@ class WindowsScheduleManager:
             except Exception as e:
                 logger.warning(f"COM delete task failed: {e}, falling back to schtasks")
 
+        if sys.platform != 'win32':
+            return False
+
         cmd = ["schtasks", "/Delete", "/TN", task_path, "/F"]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if result.returncode == 0:
@@ -1149,6 +1162,9 @@ class WindowsScheduleManager:
                 return True
             except Exception as e:
                 logger.warning(f"COM change task enabled failed: {e}, falling back to schtasks")
+
+        if sys.platform != 'win32':
+            return False
 
         cmd = [
             "schtasks", "/Change", "/ENABLE" if enabled else "/DISABLE", "/TN", task_path

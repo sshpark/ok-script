@@ -325,9 +325,10 @@ class StartController:
             if not og.device_manager.device_connected():
                 logger.error(f'Emulator is not connected {og.device_manager.device}')
                 return self.tr("Emulator is not connected, start the emulator first!")
-            if isinstance(og.device_manager.capture_method,
-                          BrowserCaptureMethod) and not og.device_manager.capture_method.connected():
-                logger.info(f"start browser")
+            if (BrowserCaptureMethod is not None
+                    and isinstance(og.device_manager.capture_method, BrowserCaptureMethod)
+                    and not og.device_manager.capture_method.connected()):
+                logger.info("start browser")
                 og.device_manager.capture_method.start_browser()
             if not og.device_manager.capture_method.connected():
                 logger.error(f'Game window is not connected {og.device_manager.capture_method}')

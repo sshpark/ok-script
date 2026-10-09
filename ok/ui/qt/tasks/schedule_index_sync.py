@@ -226,6 +226,8 @@ def _register_task_xml_via_schtasks(path: str, new_xml: str) -> bool:
 
     返回是否注册成功。
     """
+    if sys.platform != 'win32':
+        return False
     import subprocess
     import tempfile
 

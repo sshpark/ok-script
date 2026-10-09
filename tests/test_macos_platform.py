@@ -324,5 +324,59 @@ class TestMacTitleBar(unittest.TestCase):
             self.assertIn("Screen Recording permission is required", err)
             mock_quartz.CGRequestScreenCaptureAccess.assert_called_once()
 
+    def test_capture_method_placeholders_safe_for_isinstance(self):
+        from ok.device.capture import BrowserCaptureMethod, BitBltCaptureMethod, DesktopDuplicationCaptureMethod
+        self.assertIsNotNone(BrowserCaptureMethod)
+        self.assertIsNotNone(BitBltCaptureMethod)
+        self.assertFalse(isinstance(object(), BrowserCaptureMethod))
+        self.assertFalse(isinstance(MacCaptureMethod(), BrowserCaptureMethod))
+        self.assertFalse(isinstance(MacCaptureMethod(), BitBltCaptureMethod))
+
+    def test_get_path_relative_to_exe_finds_bundle_resources(self):
+        import tempfile
+        from pathlib import Path
+        from ok.util.file import get_path_relative_to_exe
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            bundle_dir = Path(tmp_dir) / "MyApp.app" / "Contents"
+            macos_dir = bundle_dir / "MacOS"
+            resources_dir = bundle_dir / "Resources"
+            macos_dir.mkdir(parents=True)
+            resources_dir.mkdir(parents=True)
+
+            mock_exe = macos_dir / "myapp"
+            mock_exe.touch()
+            target_res = resources_dir / "i18n" / "zh_CN"
+            target_res.mkdir(parents=True)
+
+            with patch('sys.frozen', True, create=True), \
+                 patch('sys.executable', str(mock_exe)):
+                found = get_path_relative_to_exe("i18n", "zh_CN")
+                self.assertEqual(found, str(target_res))
+
+    def test_explorer_dispatch_macos(self):
+        from pathlib import Path
+        from ok.util.explorer import open_explorer_folder, reveal_in_explorer
+        with patch('sys.platform', 'darwin'), \
+             patch('subprocess.Popen') as mock_popen:
+            open_explorer_folder('/tmp')
+            mock_popen.assert_called_with(['open', str(Path('/tmp').resolve())])
+
+            test_file = Path('/tmp/test.log')
+            with patch('pathlib.Path.exists', return_value=True):
+                reveal_in_explorer(str(test_file))
+                mock_popen.assert_called_with(['open', '-R', str(test_file.resolve())])
+
+    def test_windows_schedule_safe_on_macos(self):
+        from ok.util.windows_schedule import WindowsScheduleManager
+        with patch('sys.platform', 'darwin'):
+            manager = WindowsScheduleManager(config={"gui_title": "OK-Test"})
+            manager._init_com_service()
+            self.assertIsNone(manager.SCHEDULE_SERVICE)
+            self.assertEqual(manager._query_tasks_via_schtasks(), [])
+            self.assertFalse(manager._create_task_via_schtasks("test", 1, Mock(), True, "\\path"))
+            self.assertFalse(manager._delete_task_by_path("\\path"))
+            self.assertFalse(manager._set_task_enabled("\\path", True))
+
 
 

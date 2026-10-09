@@ -49,17 +49,31 @@ def get_path_relative_to_exe(*files):
     # logger.debug(f'get_path_relative_to_exe application_path {application_path} frozen {frozen}')
     the_dir = os.path.dirname(application_path)
 
-    # Join the directory with the file paths
-    path = os.path.join(the_dir, *files)
+    # 1. Check relative to the executable directory
+    path = os.path.normpath(os.path.join(the_dir, *files))
+    if os.path.exists(path):
+        return path
 
-    # Normalize the path
-    normalized_path = os.path.normpath(path)
+    # 2. Check sys._MEIPASS if running in PyInstaller bundle
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        meipass_path = os.path.normpath(os.path.join(meipass, *files))
+        if os.path.exists(meipass_path):
+            return meipass_path
 
-    if not os.path.exists(normalized_path):
-        path = path = os.path.join(os.getcwd(), *files)
-        normalized_path = os.path.normpath(path)
+    # 3. On macOS .app bundle, check Contents/Resources (the_dir is Contents/MacOS)
+    resources_dir = os.path.normpath(os.path.join(the_dir, '..', 'Resources'))
+    if os.path.isdir(resources_dir):
+        res_path = os.path.normpath(os.path.join(resources_dir, *files))
+        if os.path.exists(res_path):
+            return res_path
 
-    return normalized_path
+    # 4. Check relative to current working directory
+    cwd_path = os.path.normpath(os.path.join(os.getcwd(), *files))
+    if os.path.exists(cwd_path):
+        return cwd_path
+
+    return path
 
 
 def get_relative_path(*files):
