@@ -100,18 +100,31 @@ class MacCaptureMethod(BaseCaptureMethod):
             w = mac_window.width
             h = mac_window.height
 
-            # Capture only the game window region
-            image = Quartz.CGWindowListCreateImage(
-                Quartz.CGRectMake(x, y, w, h),
-                Quartz.kCGWindowListOptionOnScreenOnly,
-                Quartz.kCGNullWindowID,
-                Quartz.kCGWindowImageDefault
-            )
+            # Try direct window capture first if window ID is known
+            image = None
+            if mac_window.hwnd:
+                image = Quartz.CGWindowListCreateImage(
+                    Quartz.CGRectNull,
+                    Quartz.kCGWindowListOptionIncludingWindow,
+                    mac_window.hwnd,
+                    Quartz.kCGWindowImageBoundsIgnoreFraming
+                )
+
+            # Fallback to cropping screen rectangle
+            if not image:
+                image = Quartz.CGWindowListCreateImage(
+                    Quartz.CGRectMake(x, y, w, h),
+                    Quartz.kCGWindowListOptionOnScreenOnly,
+                    Quartz.kCGNullWindowID,
+                    Quartz.kCGWindowImageDefault
+                )
 
             if not image:
                 return None
 
             bgr = _cgimage_to_bgr(image)
+            if w > 0:
+                mac_window.scaling = bgr.shape[1] / w
             self._size = (bgr.shape[1], bgr.shape[0])
             self._frame_count += 1
             return bgr

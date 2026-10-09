@@ -378,5 +378,57 @@ class TestMacTitleBar(unittest.TestCase):
             self.assertFalse(manager._delete_task_by_path("\\path"))
             self.assertFalse(manager._set_task_enabled("\\path", True))
 
+    def test_mac_window_filters_helper_app(self):
+        exit_event = Mock()
+        window = MacWindow(exit_event, title=["Wuthering Waves", "鸣潮"])
+        mock_window_list = [
+            # Helper app window (OK-WW) - must be ignored!
+            {
+                'kCGWindowNumber': 9999,
+                'kCGWindowOwnerName': '鸣潮小助手',
+                'kCGWindowName': '',
+                'kCGWindowOwnerPID': 18152,
+                'kCGWindowBounds': {'X': 100, 'Y': 100, 'Width': 1200, 'Height': 800},
+            },
+            # Real game window
+            {
+                'kCGWindowNumber': 5750,
+                'kCGWindowOwnerName': '鸣潮',
+                'kCGWindowName': '',
+                'kCGWindowOwnerPID': 18136,
+                'kCGWindowBounds': {'X': 0, 'Y': 0, 'Width': 640, 'Height': 432},
+            }
+        ]
+        with patch('Quartz.CGWindowListCopyWindowInfo', return_value=mock_window_list):
+            win_id, bounds, owner = window._find_game_window()
+            self.assertEqual(win_id, 5750)
+            self.assertEqual(owner, '鸣潮')
+            self.assertEqual(window.game_pid, 18136)
 
+    def test_mac_window_bring_to_front_pid_activation(self):
+        exit_event = Mock()
+        window = MacWindow(exit_event, title="Game")
+        window.exists = True
+        window.game_pid = 18136
 
+        mock_ns_app = Mock()
+        mock_app = Mock()
+        mock_ns_app.runningApplicationWithProcessIdentifier_.return_value = mock_app
+        with patch('ok.device.capture_methods.mac_window.NSRunningApplication', mock_ns_app):
+            success = window.bring_to_front()
+            self.assertTrue(success)
+            mock_ns_app.runningApplicationWithProcessIdentifier_.assert_called_once_with(18136)
+            mock_app.activateWithOptions_.assert_called_once_with(2)
+
+    def test_mac_interaction_permission_throttling(self):
+        mock_capture = Mock()
+        interaction = MacInteraction(mock_capture)
+        with patch('ok.device.interaction_methods.mac_interaction._has_accessibility_permissions', return_value=False), \
+             patch('ok.device.interaction_methods.mac_interaction.logger.warning') as mock_log:
+            # First call logs warning
+            self.assertFalse(interaction._ensure_permissions())
+            self.assertEqual(mock_log.call_count, 1)
+
+            # Immediate second call should be throttled (no duplicate log)
+            self.assertFalse(interaction._ensure_permissions())
+            self.assertEqual(mock_log.call_count, 1)

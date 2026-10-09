@@ -266,8 +266,11 @@ class StartController:
         supported, resolution = og.executor.check_frame_and_resolution(supported_ratio, min_size)
         if not supported:
             resize_success = False
-            if resize_to and is_windows_capture and auto_resize_enabled:
-                resize_success = capture_method.hwnd_window.try_resize_to(resize_to)
+            if resize_to and auto_resize_enabled:
+                if is_windows_capture and hasattr(capture_method, 'hwnd_window'):
+                    resize_success = capture_method.hwnd_window.try_resize_to(resize_to)
+                elif hasattr(capture_method, 'mac_window') and capture_method.mac_window:
+                    resize_success = capture_method.mac_window.try_resize_to(resize_to)
             if not resize_success:
                 error = self.tr(
                     'Resolution {resolution} check failed, some tasks might not work correctly!').format(
@@ -320,6 +323,10 @@ class StartController:
             logger.info(f'test check_device_error msg: {error_msg}')
             if not device:
                 return self.tr('No game selected!')
+            if device and device.get('device') == 'macos':
+                perm_err = self.check_mac_permissions(request=True)
+                if perm_err:
+                    return perm_err
             if og.device_manager.capture_method is None:
                 return self.tr("Selected capture method is not supported by the game or your system!")
             if not og.device_manager.device_connected():

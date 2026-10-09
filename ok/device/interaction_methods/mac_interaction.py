@@ -52,10 +52,14 @@ MAC_KEY_MAP = {
 }
 
 
-def _has_accessibility_permissions():
+def _has_accessibility_permissions(prompt=False):
     """Check if the current process has Accessibility (AX) permissions."""
     try:
         import ApplicationServices
+        if prompt and hasattr(ApplicationServices, 'AXIsProcessTrustedWithOptions') and hasattr(ApplicationServices, 'kAXTrustedCheckOptionPrompt'):
+            return bool(ApplicationServices.AXIsProcessTrustedWithOptions(
+                {ApplicationServices.kAXTrustedCheckOptionPrompt: True}
+            ))
         return bool(ApplicationServices.AXIsProcessTrusted())
     except Exception as e:
         logger.warning(f"mac_interaction: could not check AX permissions: {e}")
@@ -92,17 +96,29 @@ class MacInteraction(BaseInteraction):
     def __init__(self, capture):
         super().__init__(capture)
         self._has_permissions = None
+        self._has_prompted = False
+        self._last_perm_warning_time = 0
         self._key_up_event_cache = {}
         self._key_down_event_cache = {}
         self._last_activate_time = 0
 
     def _ensure_permissions(self):
-        """Check and cache accessibility permissions."""
-        if self._has_permissions is None:
-            self._has_permissions = _has_accessibility_permissions()
-        if not self._has_permissions:
+        """Check and refresh accessibility permissions, throttling warning logs."""
+        trusted = _has_accessibility_permissions()
+        if trusted:
+            self._has_permissions = True
+            return True
+
+        self._has_permissions = False
+        now = time.time()
+        if not self._has_prompted:
+            self._has_prompted = True
+            _has_accessibility_permissions(prompt=True)
+
+        if now - self._last_perm_warning_time > 30:
+            self._last_perm_warning_time = now
             logger.warning(_get_accessibility_prompt())
-        return self._has_permissions
+        return False
 
     def _auto_activate(self):
         """

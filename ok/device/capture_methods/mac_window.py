@@ -4,6 +4,7 @@ mac_window.py - macOS equivalent of HwndWindow.
 Finds and tracks the Wuthering Waves game window using macOS Quartz/Accessibility APIs.
 Uses CGWindowListCopyWindowInfo for window discovery and background polling.
 """
+import os
 import threading
 import time
 
@@ -11,12 +12,15 @@ logger = None  # set during init
 
 try:
     import Quartz
-    from AppKit import NSWorkspace, NSApplication
+    import AppKit
+    from AppKit import NSWorkspace, NSApplication, NSRunningApplication
     from Foundation import NSString
 except ImportError:
     Quartz = None
+    AppKit = None
     NSWorkspace = None
     NSApplication = None
+    NSRunningApplication = None
 
 
 class MacWindow:
@@ -24,6 +28,10 @@ class MacWindow:
     macOS equivalent of HwndWindow.
     Finds the game window by process name, tracks its bounds.
     """
+
+    KNOWN_GAME_KEYWORDS = ('wuthering', 'kuro', '鸣潮', '鳴潮', 'client-mac-shipping', 'mingchao')
+    KNOWN_BUNDLE_KEYWORDS = ('wutheringwaves', 'mingchao', 'kurogame')
+    HELPER_KEYWORDS = ('助手', 'ok-ww', 'ok-wuthering-waves', 'ok-script', 'assistant')
 
     def __init__(self, exit_event, title=None, exe_names=None, frame_width=0, frame_height=0,
                  player_id=-1, global_config=None, device_manager=None):
@@ -43,6 +51,7 @@ class MacWindow:
         self.exists = False
         self.visible = False
         self.hwnd = 0  # CGWindowID for API compatibility
+        self.game_pid = 0
         self.x = 0
         self.y = 0
         self.width = 0
@@ -170,9 +179,6 @@ class MacWindow:
             if logger:
                 logger.error(f"MacWindow do_update_window_size exception", e)
 
-    KNOWN_GAME_KEYWORDS = ('wuthering', 'kuro', '鸣潮', '鳴潮', 'client-mac-shipping', 'mingchao')
-    KNOWN_BUNDLE_KEYWORDS = ('wutheringwaves', 'mingchao', 'kurogame')
-
     def _find_game_window(self):
         """
         Find the Wuthering Waves window using CGWindowListCopyWindowInfo.
@@ -195,11 +201,22 @@ class MacWindow:
         exe_patterns = [self.exe_names] if isinstance(self.exe_names, str) else (self.exe_names or [])
 
         candidates = []
+        my_pid = os.getpid()
+        ppid = os.getppid()
+        pids_to_ignore = {my_pid, ppid}
+
         for w in window_list:
+            pid = w.get('kCGWindowOwnerPID', 0)
+            if pid in pids_to_ignore:
+                continue
+
             owner = (w.get('kCGWindowOwnerName') or '').strip()
             name = (w.get('kCGWindowName') or '').strip()
             owner_lower = owner.lower()
             name_lower = name.lower()
+
+            if any(hk in owner_lower or hk in name_lower for hk in self.HELPER_KEYWORDS):
+                continue
 
             matched = False
             # 1. Match by explicit title(s)
@@ -247,11 +264,13 @@ class MacWindow:
 
         bounds = best.get('kCGWindowBounds', {})
         owner = best.get('kCGWindowOwnerName', '') or best.get('kCGWindowName', '')
+        self.game_pid = int(best.get('kCGWindowOwnerPID', 0))
         return best['kCGWindowNumber'], bounds, owner
 
     def get_abs_cords(self, x, y):
         """Convert game-relative coordinates to screen coordinates."""
-        return self.x + x, self.y + y
+        scale = self.scaling if self.scaling > 0 else 1.0
+        return self.x + int(x / scale), self.y + int(y / scale)
 
     def get_top_window_cords(self, x, y):
         """Equivalent of HwndWindow.get_top_window_cords."""
@@ -262,15 +281,27 @@ class MacWindow:
         if not self.exists or not NSWorkspace:
             return False
         try:
+            flag = getattr(AppKit, 'NSApplicationActivateIgnoringOtherApps', 1 << 1)
+            # 1. Prefer activating directly by PID if known
+            if self.game_pid and NSRunningApplication:
+                app = NSRunningApplication.runningApplicationWithProcessIdentifier_(self.game_pid)
+                if app:
+                    app.activateWithOptions_(flag)
+                    return True
+
+            # 2. Fallback: match running application by keyword, ignoring ourselves
+            my_pid = os.getpid()
             ws = NSWorkspace.sharedWorkspace()
             for app in ws.runningApplications():
+                if app.processIdentifier() == my_pid:
+                    continue
                 app_name = (app.localizedName() or '').lower()
                 bundle_id = (app.bundleIdentifier() or '').lower()
+                if any(hk in app_name or hk in bundle_id for hk in self.HELPER_KEYWORDS):
+                    continue
                 if (any(k in app_name for k in self.KNOWN_GAME_KEYWORDS) or
                         any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS)):
-                    app.activateWithOptions_(
-                        NSApplication.NSApplicationActivateIgnoringOtherApps
-                    )
+                    app.activateWithOptions_(flag)
                     return True
         except Exception as e:
             if logger:
@@ -280,21 +311,19 @@ class MacWindow:
     def is_foreground(self):
         """
         Check if game window is visible on screen (not necessarily frontmost).
-
-        CGWindowListCreateImage can capture any window that appears in the
-        on-screen window list, so we no longer require the game to be the
-        active/frontmost application. This allows the task to run even when
-        the OK-WW GUI or another window is in front of the game.
         """
         if not Quartz:
-            # Fallback: check frontmost application when Quartz is unavailable
             if not NSWorkspace:
                 return False
             try:
                 front_app = NSWorkspace.sharedWorkspace().frontmostApplication()
                 if front_app:
+                    if front_app.processIdentifier() == os.getpid():
+                        return False
                     name = (front_app.localizedName() or '').lower()
                     bundle_id = (front_app.bundleIdentifier() or '').lower()
+                    if any(hk in name or hk in bundle_id for hk in self.HELPER_KEYWORDS):
+                        return False
                     return (any(k in name for k in self.KNOWN_GAME_KEYWORDS) or
                             any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS))
             except Exception as e:
@@ -321,8 +350,12 @@ class MacWindow:
             if NSWorkspace:
                 front_app = NSWorkspace.sharedWorkspace().frontmostApplication()
                 if front_app:
+                    if front_app.processIdentifier() == os.getpid():
+                        return False
                     name = (front_app.localizedName() or '').lower()
                     bundle_id = (front_app.bundleIdentifier() or '').lower()
+                    if any(hk in name or hk in bundle_id for hk in self.HELPER_KEYWORDS):
+                        return False
                     return (any(k in name for k in self.KNOWN_GAME_KEYWORDS) or
                             any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS))
         except Exception as e:
@@ -334,21 +367,24 @@ class MacWindow:
     def is_frontmost(self):
         """
         Check if the game is the frontmost (active) application.
-
-        Unlike is_foreground() (which checks if the window is visible on screen),
-        this returns True only when the game is the currently focused app.
-        CGEventPost sends keyboard/mouse events to the frontmost app, so this
-        is used by MacInteraction to decide when to call bring_to_front().
         """
         if not NSWorkspace:
             return False
         try:
             front_app = NSWorkspace.sharedWorkspace().frontmostApplication()
-            if front_app:
-                name = (front_app.localizedName() or '').lower()
-                bundle_id = (front_app.bundleIdentifier() or '').lower()
-                return (any(k in name for k in self.KNOWN_GAME_KEYWORDS) or
-                        any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS))
+            if not front_app:
+                return False
+            pid = front_app.processIdentifier()
+            if pid == os.getpid():
+                return False
+            if self.game_pid and pid == self.game_pid:
+                return True
+            name = (front_app.localizedName() or '').lower()
+            bundle_id = (front_app.bundleIdentifier() or '').lower()
+            if any(hk in name or hk in bundle_id for hk in self.HELPER_KEYWORDS):
+                return False
+            return (any(k in name for k in self.KNOWN_GAME_KEYWORDS) or
+                    any(b in bundle_id for b in self.KNOWN_BUNDLE_KEYWORDS))
         except Exception as e:
             if logger:
                 logger.error(f"MacWindow is_frontmost error", e)
@@ -363,9 +399,52 @@ class MacWindow:
         self.stop_event.set()
 
     def try_resize_to(self, resize_to):
-        """macOS: no window resize via API. Returns False to skip."""
-        if not self.global_config:
+        """macOS: Try resizing the game window via Accessibility API."""
+        if not self.game_pid or not resize_to:
             return False
+        try:
+            from ApplicationServices import (
+                AXUIElementCreateApplication,
+                AXUIElementCopyAttributeValue,
+                AXUIElementSetAttributeValue,
+                AXValueCreate,
+                kAXValueCGSizeType,
+                kAXWindowsAttribute,
+                kAXSizeAttribute,
+            )
+            app = AXUIElementCreateApplication(self.game_pid)
+            err, windows = AXUIElementCopyAttributeValue(app, kAXWindowsAttribute, None)
+            if err != 0 or not windows:
+                return False
+
+            main_display = Quartz.CGMainDisplayID()
+            screen_w = Quartz.CGDisplayPixelsWide(main_display)
+            screen_h = Quartz.CGDisplayPixelsHigh(main_display)
+
+            target_w, target_h = None, None
+            for res in resize_to:
+                if screen_w >= res[0] and screen_h >= res[1]:
+                    target_w, target_h = res[0], res[1]
+                    break
+            if not target_w:
+                target_w, target_h = resize_to[-1]
+
+            scale = self.scaling if self.scaling > 0 else 1.0
+            pts_w = target_w / scale
+            pts_h = target_h / scale
+
+            for win in windows:
+                size_val = AXValueCreate(kAXValueCGSizeType, Quartz.CGSizeMake(pts_w, pts_h))
+                err = AXUIElementSetAttributeValue(win, kAXSizeAttribute, size_val)
+                if err == 0:
+                    if logger:
+                        logger.info(f"MacWindow resized game window to {pts_w}x{pts_h} points ({target_w}x{target_h})")
+                    time.sleep(0.5)
+                    self.do_update_window_size()
+                    return True
+        except Exception as e:
+            if logger:
+                logger.warning(f"MacWindow try_resize_to failed: {e}")
         return False
 
     def frame_ratio(self, size):
