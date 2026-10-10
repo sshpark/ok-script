@@ -241,10 +241,11 @@ class TaskExecutor:
             actual_ratio = 0
         else:
             actual_ratio = width / height
-        supported_ratio = ratio_text_to_number(supported_ratio)
-        # Calculate the difference between the actual and supported ratios
-        difference = abs(actual_ratio - supported_ratio)
-        support = difference <= 0.01 * supported_ratio
+        parsed_ratios = ratio_text_to_number(supported_ratio)
+        if isinstance(parsed_ratios, (list, tuple)):
+            support = any(abs(actual_ratio - r) <= 0.02 * r for r in parsed_ratios)
+        else:
+            support = abs(actual_ratio - parsed_ratios) <= 0.02 * parsed_ratios
         if not support:
             logger.error(f'resolution error {width}x{height} {frame is None}')
         if not support and frame is not None:

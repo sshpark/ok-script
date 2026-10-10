@@ -100,24 +100,33 @@ class MacCaptureMethod(BaseCaptureMethod):
             w = mac_window.width
             h = mac_window.height
 
+            tb = getattr(mac_window, 'title_bar_height', 0)
+            if not isinstance(tb, (int, float)):
+                tb = 0
+
             # Try direct window capture first if window ID is known
             image = None
-            if mac_window.hwnd:
+            need_crop_tb = False
+            hwnd = getattr(mac_window, 'hwnd', 0)
+            if isinstance(hwnd, int) and hwnd > 0:
                 image = Quartz.CGWindowListCreateImage(
                     Quartz.CGRectNull,
                     Quartz.kCGWindowListOptionIncludingWindow,
-                    mac_window.hwnd,
+                    hwnd,
                     Quartz.kCGWindowImageBoundsIgnoreFraming
                 )
+                if image and tb > 0:
+                    need_crop_tb = True
 
             # Fallback to cropping screen rectangle
             if not image:
                 image = Quartz.CGWindowListCreateImage(
-                    Quartz.CGRectMake(x, y, w, h),
+                    Quartz.CGRectMake(x, y + tb, w, h),
                     Quartz.kCGWindowListOptionOnScreenOnly,
                     Quartz.kCGNullWindowID,
                     Quartz.kCGWindowImageDefault
                 )
+                need_crop_tb = False
 
             if not image:
                 return None
@@ -125,6 +134,13 @@ class MacCaptureMethod(BaseCaptureMethod):
             bgr = _cgimage_to_bgr(image)
             if w > 0:
                 mac_window.scaling = bgr.shape[1] / w
+            if need_crop_tb and tb > 0:
+                scale = getattr(mac_window, 'scaling', 1.0)
+                if not isinstance(scale, (int, float)) or scale <= 0:
+                    scale = 1.0
+                crop_top = int(tb * scale)
+                if 0 < crop_top < bgr.shape[0]:
+                    bgr = bgr[crop_top:, :]
             self._size = (bgr.shape[1], bgr.shape[0])
             self._frame_count += 1
             return bgr

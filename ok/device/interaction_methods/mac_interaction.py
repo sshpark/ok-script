@@ -22,33 +22,80 @@ except ImportError:
     _HAS_QUARTZ = False
 
 
-# macOS CGKeyCode mapping (US keyboard layout)
-# Source: https://developer.apple.com/documentation/coregraphics/cgeventkeyboard
+# macOS CGKeyCode mapping (US keyboard layout, HIToolbox/Events.h)
 MAC_KEY_MAP = {
+    # Letters (kVK_ANSI_*)
+    'a': 0, 'b': 11, 'c': 8, 'd': 2, 'e': 14,
+    'f': 3, 'g': 5, 'h': 4, 'i': 34, 'j': 38,
+    'k': 40, 'l': 37, 'm': 46, 'n': 45, 'o': 31,
+    'p': 35, 'q': 12, 'r': 15, 's': 1, 't': 17,
+    'u': 32, 'v': 9, 'w': 13, 'x': 7, 'y': 16,
+    'z': 6,
+
+    # Numbers (top number row)
+    '1': 18, '2': 19, '3': 20, '4': 21, '5': 23,
+    '6': 22, '7': 26, '8': 28, '9': 25, '0': 29,
+
     # Function keys
     'f1': 122, 'f2': 120, 'f3': 99, 'f4': 118, 'f5': 96,
-    'f6': 97, 'f7': 98, 'f8': 100, 'f9': 101, 'f10': 108,
-    'f11': 104, 'f12': 109, 'f13': 103, 'f14': 105,
-    'f15': 107, 'f16': 106, 'f17': 60, 'f18': 88, 'f19': 87,
-    # Navigation
+    'f6': 97, 'f7': 98, 'f8': 100, 'f9': 101, 'f10': 109,
+    'f11': 103, 'f12': 111, 'f13': 105, 'f14': 107, 'f15': 113,
+    'f16': 106, 'f17': 64, 'f18': 79, 'f19': 80, 'f20': 90,
+
+    # Punctuation & Symbols
+    '-': 27, 'minus': 27,
+    '=': 24, 'equal': 24,
+    '[': 33, ']': 30,
+    '\\': 42, 'backslash': 42,
+    ';': 41, 'semicolon': 41,
+    "'": 39, 'quote': 39,
+    ',': 43, 'comma': 43,
+    '.': 47, 'period': 47,
+    '/': 44, 'slash': 44,
+    '`': 50, 'grave': 50,
+
+    # Navigation & Control
     'escape': 53, 'esc': 53,
     'tab': 48,
     'return': 36, 'enter': 36,
     'space': 49,
     'backspace': 51,
     'delete': 117,
-    # Arrow keys
     'up': 126, 'down': 125, 'left': 123, 'right': 124,
     'pageup': 116, 'pagedown': 121, 'page_up': 116, 'page_down': 121,
     'home': 115, 'end': 119, 'insert': 114,
+
     # Modifiers
-    'shift': 56, 'lshift': 56, 'rshift': 59, 'shift_l': 56, 'shift_r': 59,
-    'ctrl': 59, 'lctrl': 59, 'rctrl': 62, 'lcontrol': 59, 'rcontrol': 62, 'ctrl_l': 59, 'ctrl_r': 62,
-    'alt': 58, 'lalt': 58, 'ralt': 61, 'alt_l': 58, 'alt_r': 61,
-    # Command key (macOS super key)
-    'cmd': 55, 'cmd_l': 55, 'cmd_r': 55, 'command': 55, 'windows': 55, 'meta': 55,
-    # Caps lock
+    'shift': 56, 'lshift': 56, 'shift_l': 56,
+    'rshift': 60, 'shift_r': 60,
+    'ctrl': 59, 'lctrl': 59, 'ctrl_l': 59, 'control': 59,
+    'rctrl': 62, 'ctrl_r': 62,
+    'alt': 58, 'lalt': 58, 'alt_l': 58, 'option': 58,
+    'ralt': 61, 'alt_r': 61, 'option_r': 61,
+    'cmd': 55, 'cmd_l': 55, 'command': 55, 'super': 55, 'windows': 55, 'meta': 55,
+    'rcmd': 54, 'cmd_r': 54,
     'caps_lock': 57, 'capslock': 57,
+    'fn': 63,
+}
+
+
+# Modifier flag masks for CGEventSetFlags
+MODIFIER_FLAGS = {
+    'fn': getattr(Quartz, 'kCGEventFlagMaskSecondaryFn', 0x00800000) if Quartz else 0x00800000,
+    'cmd': getattr(Quartz, 'kCGEventFlagMaskCommand', 0x00100000) if Quartz else 0x00100000,
+    'command': getattr(Quartz, 'kCGEventFlagMaskCommand', 0x00100000) if Quartz else 0x00100000,
+    'super': getattr(Quartz, 'kCGEventFlagMaskCommand', 0x00100000) if Quartz else 0x00100000,
+    'shift': getattr(Quartz, 'kCGEventFlagMaskShift', 0x00020000) if Quartz else 0x00020000,
+    'lshift': getattr(Quartz, 'kCGEventFlagMaskShift', 0x00020000) if Quartz else 0x00020000,
+    'rshift': getattr(Quartz, 'kCGEventFlagMaskShift', 0x00020000) if Quartz else 0x00020000,
+    'alt': getattr(Quartz, 'kCGEventFlagMaskAlternate', 0x00080000) if Quartz else 0x00080000,
+    'lalt': getattr(Quartz, 'kCGEventFlagMaskAlternate', 0x00080000) if Quartz else 0x00080000,
+    'ralt': getattr(Quartz, 'kCGEventFlagMaskAlternate', 0x00080000) if Quartz else 0x00080000,
+    'option': getattr(Quartz, 'kCGEventFlagMaskAlternate', 0x00080000) if Quartz else 0x00080000,
+    'ctrl': getattr(Quartz, 'kCGEventFlagMaskControl', 0x00040000) if Quartz else 0x00040000,
+    'lctrl': getattr(Quartz, 'kCGEventFlagMaskControl', 0x00040000) if Quartz else 0x00040000,
+    'rctrl': getattr(Quartz, 'kCGEventFlagMaskControl', 0x00040000) if Quartz else 0x00040000,
+    'control': getattr(Quartz, 'kCGEventFlagMaskControl', 0x00040000) if Quartz else 0x00040000,
 }
 
 
@@ -148,77 +195,75 @@ class MacInteraction(BaseInteraction):
             logger.debug(f"MacInteraction _auto_activate error", e)
 
     def _get_key_code(self, key):
-        """Convert key name to macOS CGKeyCode."""
+        """Convert key name to macOS CGKeyCode. Returns None for unknown keys."""
         key = str(key).lower().strip()
+        return MAC_KEY_MAP.get(key, None)
 
-        # Direct map lookup
-        if key in MAC_KEY_MAP:
-            return MAC_KEY_MAP[key]
+    def _parse_keys(self, key):
+        """Parse key string which may contain '+' combinations (e.g. 'fn+f2', 'ctrl+c')."""
+        if not key:
+            return []
+        key_str = str(key).strip().lower()
+        if '+' in key_str:
+            return [k.strip() for k in key_str.split('+') if k.strip()]
+        return [key_str]
 
-        # Single character: find key code from the key
-        # Try to get the key code for a letter/digit
-        if len(key) == 1:
-            # Build a key-down event from the character
-            # CGEventCreateKeyboardEvent with key=0 and shift=False sends the character
-            try:
-                from Quartz import CGEventCreateKeyboardEvent, CGEventGetIntegerValueField, kCGKeyboardEventKeycode
-                event = CGEventCreateKeyboardEvent(None, 0, True)
-                if event:
-                    # Create a character event
-                    char_event = Quartz.CGEventCreateKeyboardEvent(None, 0, True)
-                    char_event.setIntegerValueForField_(
-                        Quartz.kCGKeyboardEventKeycode, 0
-                    )
-                    # Try to get key code from the character using NSEvent
-                    from AppKit import NSEvent
-                    # Use a simpler approach: find the key code for the character
-                    # by checking standard key positions
-                    char_lower = key.lower()
-                    # Letter keys: a=0, b=1, ... (US layout standard)
-                    # Actually, let's use the character directly
-                    if char_lower >= 'a' and char_lower <= 'z':
-                        # US layout: A=0, B=1, C=2, ...
-                        return ord(char_lower) - ord('a')
-                    elif char_lower >= '0' and char_lower <= '9':
-                        # US layout: 0=29, 1=18, 2=19, 3=20, 4=21, 5=22, 6=23, 7=24, 8=25, 9=26
-                        digits = {'0': 29, '1': 18, '2': 19, '3': 20, '4': 21,
-                                  '5': 22, '6': 23, '7': 24, '8': 25, '9': 26}
-                        return digits.get(char_lower, 0)
-            except Exception:
-                pass
+    def _send_single_key(self, key, is_down=True, extra_flags=0):
+        key_code = self._get_key_code(key)
+        if key_code is None or key_code < 0:
+            return
+        try:
+            self._ensure_permissions()
+            event = Quartz.CGEventCreateKeyboardEvent(None, key_code, is_down)
+            if not event:
+                return
+            # macOS F1-F12 keys always carry SecondaryFn flag; combine with extra flags
+            flags = Quartz.CGEventGetFlags(event)
+            is_fn_key = (122 >= key_code >= 96) or key_code in (109, 103, 111, 105, 107, 113, 106)
+            combined_flags = flags | extra_flags
+            if is_fn_key and ('fn' in MODIFIER_FLAGS):
+                combined_flags |= MODIFIER_FLAGS['fn']
+            if combined_flags != flags:
+                Quartz.CGEventSetFlags(event, combined_flags)
+            Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
+        except Exception as e:
+            logger.error(f"MacInteraction _send_single_key: {key} -> {key_code}", e)
 
-        # Default: return 0 (no-op for unknown keys)
-        return 0
-
-    def send_key(self, key, down_time=0.02):
+    def send_key(self, key, down_time=0.05):
         super().send_key(key, down_time)
         self._auto_activate()
-        self.send_key_down(key)
-        time.sleep(down_time)
-        self.send_key_up(key)
+        keys = self._parse_keys(key)
+        if not keys:
+            return
+        if len(keys) == 1:
+            self._send_single_key(keys[0], is_down=True)
+            time.sleep(down_time)
+            self._send_single_key(keys[0], is_down=False)
+        else:
+            # Combo keys (e.g. 'fn+f2'): press modifiers in order, then main key with flags
+            modifiers = keys[:-1]
+            main_key = keys[-1]
+            flag_mask = 0
+            for m in modifiers:
+                if m in MODIFIER_FLAGS:
+                    flag_mask |= MODIFIER_FLAGS[m]
+                self._send_single_key(m, is_down=True)
+            self._send_single_key(main_key, is_down=True, extra_flags=flag_mask)
+            time.sleep(down_time)
+            self._send_single_key(main_key, is_down=False, extra_flags=flag_mask)
+            for m in reversed(modifiers):
+                self._send_single_key(m, is_down=False)
 
     def send_key_down(self, key):
         self._auto_activate()
-        key_code = self._get_key_code(key)
-        if key_code == 0:
-            return
-        try:
-            self._ensure_permissions()
-            event = Quartz.CGEventCreateKeyboardEvent(None, key_code, True)
-            Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
-        except Exception as e:
-            logger.error(f"MacInteraction send_key_down: {key} -> {key_code}", e)
+        keys = self._parse_keys(key)
+        for k in keys:
+            self._send_single_key(k, is_down=True)
 
     def send_key_up(self, key):
-        key_code = self._get_key_code(key)
-        if key_code == 0:
-            return
-        try:
-            self._ensure_permissions()
-            event = Quartz.CGEventCreateKeyboardEvent(None, key_code, False)
-            Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
-        except Exception as e:
-            logger.error(f"MacInteraction send_key_up: {key} -> {key_code}", e)
+        keys = self._parse_keys(key)
+        for k in reversed(keys):
+            self._send_single_key(k, is_down=False)
 
     def move(self, x, y, down_btn=0):
         """Move cursor to position (x, y) in game coordinates."""
@@ -252,17 +297,27 @@ class MacInteraction(BaseInteraction):
             self._ensure_permissions()
             btn_down = Quartz.kCGEventLeftMouseDown
             btn_up = Quartz.kCGEventLeftMouseUp
+            mouse_btn = Quartz.kCGMouseButtonLeft
+            btn_number = 0
             if key == "right":
                 btn_down = Quartz.kCGEventRightMouseDown
                 btn_up = Quartz.kCGEventRightMouseUp
+                mouse_btn = Quartz.kCGMouseButtonRight
+                btn_number = 1
             elif key == "middle":
                 btn_down = Quartz.kCGEventOtherMouseDown
                 btn_up = Quartz.kCGEventOtherMouseUp
+                mouse_btn = Quartz.kCGMouseButtonCenter
+                btn_number = 2
 
-            event_down = Quartz.CGEventCreateMouseEvent(None, btn_down, (abs_x, abs_y), 0)
+            event_down = Quartz.CGEventCreateMouseEvent(None, btn_down, (abs_x, abs_y), mouse_btn)
+            if key == "middle" and hasattr(Quartz, 'kCGMouseEventButtonNumber'):
+                Quartz.CGEventSetIntegerValueField(event_down, Quartz.kCGMouseEventButtonNumber, btn_number)
             Quartz.CGEventPost(Quartz.kCGSessionEventTap, event_down)
             time.sleep(down_time)
-            event_up = Quartz.CGEventCreateMouseEvent(None, btn_up, (abs_x, abs_y), 0)
+            event_up = Quartz.CGEventCreateMouseEvent(None, btn_up, (abs_x, abs_y), mouse_btn)
+            if key == "middle" and hasattr(Quartz, 'kCGMouseEventButtonNumber'):
+                Quartz.CGEventSetIntegerValueField(event_up, Quartz.kCGMouseEventButtonNumber, btn_number)
             Quartz.CGEventPost(Quartz.kCGSessionEventTap, event_up)
         except Exception as e:
             logger.error(f"MacInteraction click: {x},{y} -> {abs_x},{abs_y}", e)
@@ -276,12 +331,20 @@ class MacInteraction(BaseInteraction):
         try:
             self._ensure_permissions()
             btn = Quartz.kCGEventLeftMouseDown
+            mouse_btn = Quartz.kCGMouseButtonLeft
+            btn_number = 0
             if key == "right":
                 btn = Quartz.kCGEventRightMouseDown
+                mouse_btn = Quartz.kCGMouseButtonRight
+                btn_number = 1
             elif key == "middle":
                 btn = Quartz.kCGEventOtherMouseDown
+                mouse_btn = Quartz.kCGMouseButtonCenter
+                btn_number = 2
 
-            event = Quartz.CGEventCreateMouseEvent(None, btn, (abs_x, abs_y), 0)
+            event = Quartz.CGEventCreateMouseEvent(None, btn, (abs_x, abs_y), mouse_btn)
+            if key == "middle" and hasattr(Quartz, 'kCGMouseEventButtonNumber'):
+                Quartz.CGEventSetIntegerValueField(event, Quartz.kCGMouseEventButtonNumber, btn_number)
             Quartz.CGEventPost(Quartz.kCGSessionEventTap, event)
         except Exception as e:
             logger.error(f"MacInteraction mouse_down: {x},{y}", e)
@@ -295,12 +358,20 @@ class MacInteraction(BaseInteraction):
             abs_x, abs_y = pos.x, pos.y
 
             btn = Quartz.kCGEventLeftMouseUp
+            mouse_btn = Quartz.kCGMouseButtonLeft
+            btn_number = 0
             if key == "right":
                 btn = Quartz.kCGEventRightMouseUp
+                mouse_btn = Quartz.kCGMouseButtonRight
+                btn_number = 1
             elif key == "middle":
                 btn = Quartz.kCGEventOtherMouseUp
+                mouse_btn = Quartz.kCGMouseButtonCenter
+                btn_number = 2
 
-            event_up = Quartz.CGEventCreateMouseEvent(None, btn, (abs_x, abs_y), 0)
+            event_up = Quartz.CGEventCreateMouseEvent(None, btn, (abs_x, abs_y), mouse_btn)
+            if key == "middle" and hasattr(Quartz, 'kCGMouseEventButtonNumber'):
+                Quartz.CGEventSetIntegerValueField(event_up, Quartz.kCGMouseEventButtonNumber, btn_number)
             Quartz.CGEventPost(Quartz.kCGSessionEventTap, event_up)
         except Exception as e:
             logger.error(f"MacInteraction mouse_up", e)

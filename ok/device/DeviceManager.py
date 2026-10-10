@@ -536,7 +536,14 @@ class DeviceManager:
             if frame is not None:
                 height, width, _ = frame.shape
                 logger.info(f'get_resolution capture frame frame.shape {width, height}')
-                if self.supported_ratio is None or abs(width / height - self.supported_ratio) < 0.01:
+                supported = self.supported_ratio
+                if supported is None:
+                    ratio_match = True
+                elif isinstance(supported, (list, tuple)):
+                    ratio_match = any(abs(width / height - r) < 0.02 for r in supported)
+                else:
+                    ratio_match = abs(width / height - supported) < 0.02
+                if ratio_match:
                     self.resolution_dict[device.serial] = (width, height)
                 else:
                     logger.warning(f'resolution error {device.serial} {self.supported_ratio} {width, height}')

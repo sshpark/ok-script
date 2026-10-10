@@ -143,11 +143,6 @@ class StartController:
             error = self.check_device_error()
             if error is None:
                 return True
-            import sys
-            if sys.platform == 'darwin' and self.check_mac_permissions(request=False):
-                logger.error(f'macOS permissions missing during wait: {error}')
-                communicate.starting_emulator.emit(True, error, 0)
-                return False
             logger.error(f'waiting for game to start error {error}')
             remaining_time = wait_until - time.time()
             if remaining_time <= 0:
@@ -289,8 +284,9 @@ class StartController:
                     'Resolution {resolution} check failed, some tasks might not work correctly!').format(
                     resolution=resolution)
                 if supported_ratio:
+                    ratio_str = '/'.join(supported_ratio) if isinstance(supported_ratio, (list, tuple)) else str(supported_ratio)
                     error += self.tr(', the supported ratio is {supported_ratio}').format(
-                        supported_ratio=supported_ratio)
+                        supported_ratio=ratio_str)
                 if min_size:
                     error += self.tr(', the supported min resolution is {min_size}').format(
                         min_size=f'{min_size[0]}x{min_size[1]}')
@@ -341,17 +337,19 @@ class StartController:
         return None
 
     def check_device_error(self):
+        """Check whether the game device is ready for task execution.
+
+        Note: macOS permissions are NOT checked here. They are validated once
+        at the top of _do_start() before any polling begins, so this method
+        will never trigger system permission dialogs.
+        """
         try:
             device = og.device_manager.get_preferred_device()
-            error_msg = self.tr("{} is not connected, please select the game window.").format(
-                device['nick'])
-            logger.info(f'test check_device_error msg: {error_msg}')
             if not device:
                 return self.tr('No game selected!')
-            if device and device.get('device') == 'macos':
-                perm_err = self.check_mac_permissions(request=False)
-                if perm_err:
-                    return perm_err
+            error_msg = self.tr("{} is not connected, please select the game window.").format(
+                device['nick'])
+            logger.info(f'check_device_error msg: {error_msg}')
             if og.device_manager.capture_method is None:
                 return self.tr("Selected capture method is not supported by the game or your system!")
             if not og.device_manager.device_connected():
@@ -364,10 +362,6 @@ class StartController:
                 og.device_manager.capture_method.start_browser()
             if not og.device_manager.capture_method.connected():
                 logger.error(f'Game window is not connected {og.device_manager.capture_method}')
-                if device and device.get('device') == 'macos':
-                    perm_err = self.check_mac_permissions(request=False)
-                    if perm_err:
-                        return perm_err
                 return error_msg
             if isinstance(og.device_manager.capture_method, BaseWindowsCaptureMethod):
 
@@ -385,10 +379,6 @@ class StartController:
             frame = self.try_capture_a_frame()
             if frame is None:
                 logger.error(f'check_device_error: try_capture_a_frame returned None')
-                if device and device.get('device') == 'macos':
-                    perm_err = self.check_mac_permissions(request=False)
-                    if perm_err:
-                        return perm_err
                 return self.tr('Capture failed, please check game window')
             logger.info(f'check_device_error: capturing frame {frame.shape[1], frame.shape[0]}')
             if og.executor.feature_set is not None:

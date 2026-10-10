@@ -64,6 +64,7 @@ class MacWindow:
         self.height = 0
         self.window_width = 0
         self.window_height = 0
+        self.title_bar_height = 0
         self.real_x_offset = 0
         self.real_y_offset = 0
         self.real_width = 0
@@ -151,21 +152,50 @@ class MacWindow:
                     self.visible = visible
                     changed = True
 
-                if (x != self.x or y != self.y or w != self.width or h != self.height):
-                    self.x = x
-                    self.y = y
-                    self.width = w
-                    self.height = h
-                    self.window_width = w
-                    self.window_height = h
-                    changed = True
+                # Skip transient animation frames during macOS window gestures/Mission Control/Dock animations
+                if w >= 500 and h >= 300:
+                    tb_height = self._calculate_title_bar_height(w, h)
+                    self.title_bar_height = tb_height
+                    content_h = max(0, h - tb_height)
+
+                    # Ignore minor pixel jitter (+/- 4px) to prevent FeatureSet reload storms
+                    is_size_jitter = (
+                        self.width > 0 and self.height > 0 and
+                        abs(self.width - w) <= 4 and abs(self.height - content_h) <= 4
+                    )
+
+                    if not is_size_jitter and (x != self.x or y != self.y or w != self.width or content_h != self.height):
+                        self.x = x
+                        self.y = y
+                        self.width = w
+                        self.height = content_h
+                        self.window_width = w
+                        self.window_height = h
+                        changed = True
             else:
-                if self.exists:
-                    changed = True
-                self.exists = False
-                self.visible = False
-                self.hwnd = 0
-                self.hwnds = []
+                # Window not found in on-screen list (could be minimized, hidden, or on another Space)
+                is_proc_alive = False
+                if self.game_pid and self.game_pid > 0:
+                    try:
+                        os.kill(self.game_pid, 0)
+                        is_proc_alive = True
+                    except OSError:
+                        is_proc_alive = False
+
+                if is_proc_alive:
+                    # Process is still running, window is temporarily offscreen/hidden
+                    if self.visible:
+                        self.visible = False
+                        changed = True
+                else:
+                    # Process actually terminated
+                    if self.exists:
+                        changed = True
+                    self.exists = False
+                    self.visible = False
+                    self.hwnd = 0
+                    self.hwnds = []
+                    self.game_pid = 0
 
             if changed or old_exists != self.exists or old_visible != self.visible:
                 if logger:
@@ -177,7 +207,7 @@ class MacWindow:
                     device = self.device_manager.get_preferred_device()
                     if device:
                         device['connected'] = self.exists
-                        if self.exists:
+                        if self.exists and self.width > 0:
                             device['width'] = self.width
                             device['height'] = self.height
                             device['resolution'] = f"{self.width}x{self.height}"
@@ -276,10 +306,35 @@ class MacWindow:
         self.game_pid = int(best.get('kCGWindowOwnerPID', 0))
         return best['kCGWindowNumber'], bounds, owner
 
+    def _calculate_title_bar_height(self, w, h):
+        """Deduce macOS title bar height so the content area matches supported aspect ratios."""
+        if w <= 0 or h <= 0:
+            return 0
+        candidate_ratios = [16 / 9, 16 / 10]
+        if self.device_manager and getattr(self.device_manager, 'supported_ratio', None):
+            sr = self.device_manager.supported_ratio
+            if isinstance(sr, (list, tuple)):
+                candidate_ratios = [float(r) for r in sr]
+            elif isinstance(sr, (int, float)):
+                candidate_ratios = [float(sr)]
+
+        # If window aspect ratio already matches a supported ratio within 2%, no title bar
+        if any(abs(w / h - r) < 0.02 for r in candidate_ratios):
+            return 0
+
+        # Try standard macOS title bar heights (32pt for modern macOS, 28pt for legacy)
+        for tb in (32, 28, 30, 24):
+            if h > tb:
+                content_h = h - tb
+                if any(abs(w / content_h - r) < 0.02 for r in candidate_ratios):
+                    return tb
+
+        return 0
+
     def get_abs_cords(self, x, y):
         """Convert game-relative coordinates to screen coordinates."""
         scale = self.scaling if self.scaling > 0 else 1.0
-        return self.x + int(x / scale), self.y + int(y / scale)
+        return self.x + int(x / scale), self.y + self.title_bar_height + int(y / scale)
 
     def get_top_window_cords(self, x, y):
         """Equivalent of HwndWindow.get_top_window_cords."""

@@ -102,6 +102,16 @@ class TestMacInteraction(unittest.TestCase):
         self.assertEqual(MAC_KEY_MAP['space'], 49)
         self.assertEqual(MAC_KEY_MAP['return'], 36)
         self.assertEqual(MAC_KEY_MAP['escape'], 53)
+        self.assertEqual(MAC_KEY_MAP['f2'], 120)
+        self.assertEqual(MAC_KEY_MAP['a'], 0)
+        self.assertEqual(MAC_KEY_MAP['w'], 13)
+        self.assertEqual(MAC_KEY_MAP['s'], 1)
+        self.assertEqual(MAC_KEY_MAP['d'], 2)
+        self.assertEqual(MAC_KEY_MAP['e'], 14)
+        self.assertEqual(MAC_KEY_MAP['q'], 12)
+        self.assertEqual(MAC_KEY_MAP['r'], 15)
+        self.assertEqual(MAC_KEY_MAP['b'], 11)
+        self.assertEqual(MAC_KEY_MAP['m'], 46)
 
     def test_accessibility_check_handling(self):
         with patch('ApplicationServices.AXIsProcessTrusted', return_value=True):
@@ -122,6 +132,46 @@ class TestMacInteraction(unittest.TestCase):
             mock_capture.get_abs_cords.assert_called_once_with(100, 200)
             create_event.assert_called_once()
             post_event.assert_called_once()
+
+    def test_send_key_a_and_f2(self):
+        mock_capture = Mock()
+        mock_capture.mac_window = Mock(exists=True, is_frontmost=Mock(return_value=True))
+        interaction = MacInteraction(mock_capture)
+
+        with patch('Quartz.CGEventCreateKeyboardEvent', return_value=Mock()) as mock_create_event, \
+             patch('Quartz.CGEventPost') as mock_post_event, \
+             patch.object(interaction, '_ensure_permissions', return_value=True):
+            # 'a' has keycode 0, must NOT be ignored
+            interaction.send_key('a')
+            mock_create_event.assert_any_call(None, 0, True)
+            mock_create_event.assert_any_call(None, 0, False)
+
+            # 'f2' has keycode 120
+            interaction.send_key('f2')
+            mock_create_event.assert_any_call(None, 120, True)
+            mock_create_event.assert_any_call(None, 120, False)
+
+    def test_send_key_combo_fn_f2(self):
+        mock_capture = Mock()
+        mock_capture.mac_window = Mock(exists=True, is_frontmost=Mock(return_value=True))
+        interaction = MacInteraction(mock_capture)
+
+        mock_event = Mock()
+        with patch('Quartz.CGEventCreateKeyboardEvent', return_value=mock_event) as mock_create_event, \
+             patch('Quartz.CGEventSetFlags') as mock_set_flags, \
+             patch('Quartz.CGEventGetFlags', return_value=0), \
+             patch('Quartz.CGEventPost'), \
+             patch.object(interaction, '_ensure_permissions', return_value=True):
+            # 'fn+f2': fn (keycode 63), f2 (keycode 120)
+            interaction.send_key('fn+f2')
+            # Check fn pressed & released (63)
+            mock_create_event.assert_any_call(None, 63, True)
+            mock_create_event.assert_any_call(None, 63, False)
+            # Check f2 pressed & released (120)
+            mock_create_event.assert_any_call(None, 120, True)
+            mock_create_event.assert_any_call(None, 120, False)
+            # Check that SecondaryFn flag was set
+            mock_set_flags.assert_called()
 
 
 class TestCursorHelpers(unittest.TestCase):
@@ -473,3 +523,82 @@ class TestMacTitleBar(unittest.TestCase):
             # Immediate second call should be throttled (no duplicate log)
             self.assertFalse(interaction._ensure_permissions())
             self.assertEqual(mock_log.call_count, 1)
+
+    def test_calculate_title_bar_height_for_16_10(self):
+        exit_event = Mock()
+        window = MacWindow(exit_event, title="Game")
+        # 640x432 with 32pt title bar gives 640x400 (16:10)
+        tb = window._calculate_title_bar_height(640, 432)
+        self.assertEqual(tb, 32)
+
+        # Already 16:10 or 16:9 -> no title bar deduction
+        self.assertEqual(window._calculate_title_bar_height(640, 400), 0)
+        self.assertEqual(window._calculate_title_bar_height(1280, 720), 0)
+
+    def test_mac_window_coordinates_with_title_bar(self):
+        exit_event = Mock()
+        window = MacWindow(exit_event, title="Game")
+        window.x = 100
+        window.y = 50
+        window.title_bar_height = 32
+        window.scaling = 2.0
+
+        # Game-relative (200, 100) -> on Retina 2x: dx = 100, dy = 50
+        # Absolute coords should add title_bar_height to Y:
+        # X: 100 + 100 = 200, Y: 50 + 32 + 50 = 132
+        abs_x, abs_y = window.get_abs_cords(200, 100)
+        self.assertEqual(abs_x, 200)
+        self.assertEqual(abs_y, 132)
+
+    def test_mac_capture_crops_title_bar_when_window_captured(self):
+        mock_window = Mock()
+        mock_window.exists = True
+        mock_window.visible = True
+        mock_window.x = 0
+        mock_window.y = 0
+        mock_window.width = 640
+        mock_window.height = 400
+        mock_window.hwnd = 1001
+        mock_window.title_bar_height = 32
+        mock_window.scaling = 2.0
+
+        capture = MacCaptureMethod(mac_window=mock_window)
+        import numpy as np
+        # Simulate 1280x864 image (Retina 640x432)
+        raw_image = np.zeros((864, 1280, 3), dtype=np.uint8)
+
+        with patch('Quartz.CGWindowListCreateImage', return_value=Mock()), \
+             patch('ok.device.capture_methods.mac_capture._cgimage_to_bgr', return_value=raw_image):
+            frame = capture.do_get_frame()
+            self.assertIsNotNone(frame)
+            # 864 - (32 * 2) = 800
+            self.assertEqual(frame.shape, (800, 1280, 3))
+
+    def test_multi_aspect_ratio_validation(self):
+        from ok.util.window import ratio_text_to_number
+        from ok.util.collection import parse_ratio
+
+        # List of string ratios
+        ratios = ratio_text_to_number(['16:9', '16:10'])
+        self.assertAlmostEqual(ratios[0], 16 / 9, places=3)
+        self.assertAlmostEqual(ratios[1], 16 / 10, places=3)
+
+        parsed = parse_ratio(['16:9', '16:10'])
+        self.assertEqual(len(parsed), 2)
+
+        # Test TaskExecutor check_frame_and_resolution with 16:10 frame
+        from ok.task.TaskExecutor import TaskExecutor
+        executor = TaskExecutor.__new__(TaskExecutor)
+        executor.device_manager = Mock()
+        import numpy as np
+        frame_16_10 = np.zeros((800, 1280, 3), dtype=np.uint8)
+        mock_method = Mock()
+        mock_method.width = 1280
+        mock_method.height = 800
+        mock_method.get_frame.return_value = frame_16_10
+        executor.device_manager.capture_method = mock_method
+
+        support, res_str = executor.check_frame_and_resolution(['16:9', '16:10'], min_size=(1280, 720))
+        self.assertTrue(support)
+        self.assertEqual(res_str, '1280x800')
+

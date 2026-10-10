@@ -316,7 +316,11 @@ class ExecutorOperation:
         if name is None:
             name = f"{x} {y} {width} {height}"
         if self.out_of_ratio():
-            should_width = self.executor.device_manager.supported_ratio * self.height
+            target_ratio = self.executor.device_manager.supported_ratio
+            if isinstance(target_ratio, (list, tuple)):
+                current_ratio = self.width / self.height if self.height else 1.778
+                target_ratio = min(target_ratio, key=lambda r: abs(current_ratio - r))
+            should_width = target_ratio * self.height
             return self.box_of_screen_scaled(should_width, self.height,
                                              x_original=x * should_width,
                                              y_original=self.height * y,
@@ -331,8 +335,13 @@ class ExecutorOperation:
     def out_of_ratio(self):
         if self.height == 0:
             return False
-        return self.executor.device_manager.supported_ratio and abs(
-            self.width / self.height - self.executor.device_manager.supported_ratio) > 0.01
+        supported = self.executor.device_manager.supported_ratio
+        if not supported:
+            return False
+        if not isinstance(supported, (list, tuple)):
+            supported = [supported]
+        current_ratio = self.width / self.height
+        return not any(abs(current_ratio - r) <= 0.02 for r in supported)
 
     def ensure_in_front(self):
         if self.is_adb():
@@ -374,7 +383,11 @@ class ExecutorOperation:
                        down_time=0.02,
                        key="left"):
         if self.out_of_ratio():
-            should_width = self.executor.device_manager.supported_ratio * self.height
+            target_ratio = self.executor.device_manager.supported_ratio
+            if isinstance(target_ratio, (list, tuple)):
+                current_ratio = self.width / self.height if self.height else 1.778
+                target_ratio = min(target_ratio, key=lambda r: abs(current_ratio - r))
+            should_width = target_ratio * self.height
             x, y, w, h, scale = adjust_coordinates(x * should_width, y * self.height, 0, 0,
                                                    self.screen_width, self.screen_height, should_width,
                                                    self.height, hcenter=hcenter, vcenter=vcenter)

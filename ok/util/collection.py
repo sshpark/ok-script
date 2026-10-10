@@ -28,6 +28,10 @@ def get_median(my_list):
 
 def parse_ratio(ratio_str):
     if ratio_str:
+        if isinstance(ratio_str, (list, tuple)):
+            return [parse_ratio(r) for r in ratio_str]
+        if isinstance(ratio_str, (int, float)):
+            return float(ratio_str)
         # Split the string into two parts: '16' and '9'
         numerator, denominator = ratio_str.split(':')
         # Convert the strings to integers and perform the division

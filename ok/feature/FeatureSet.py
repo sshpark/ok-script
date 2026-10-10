@@ -102,6 +102,15 @@ class FeatureSet:
     def check_size(self, frame) -> bool:
         with self.lock:
             height, width = frame.shape[:2]
+            if height <= 0 or width <= 0:
+                return False
+            # Skip transient animation frames during macOS window gestures/transitions
+            if width < 500 or height < 300:
+                return self.load_success
+            # Ignore minor pixel jitter (+/- 4 pixels) to prevent unnecessary reloads
+            if self.width > 0 and self.height > 0:
+                if abs(self.width - width) <= 4 and abs(self.height - height) <= 4:
+                    return self.load_success
             if (self.width != width or self.height != height) and height > 0 and width > 0:
                 logger.info(f"FeatureSet: Width and height changed from {self.width}x{self.height} to {width}x{height}")
                 self.width = width
