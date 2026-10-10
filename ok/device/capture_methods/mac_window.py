@@ -113,8 +113,8 @@ class MacWindow:
                 self.do_update_window_size()
             except Exception as e:
                 if logger:
-                    logger.error(f"MacWindow update error", e)
-            time.sleep(0.2)
+                    logger.error(f"MacWindow update error: {e}")
+            self.stop_event.wait(0.2)
 
     def do_update_window_size(self):
         try:

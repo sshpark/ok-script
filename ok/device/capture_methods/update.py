@@ -4,6 +4,7 @@ import time
 from ok.util.logger import Logger
 
 from ok.device.capture_methods.mac_capture import MacCaptureMethod, MacCaptureMethodFallback
+from ok.task.exceptions import CaptureBusyException
 
 logger = Logger.get_logger(__name__)
 
@@ -17,19 +18,48 @@ if sys.platform == 'win32':
     from ok.device.capture_methods.bitblt import BitBltCaptureMethod, ForegroundBitBltCaptureMethod
     from ok.device.capture_methods.desktop_duplication import DesktopDuplicationCaptureMethod
     from ok.device.capture_methods.windows_graphics import WindowsGraphicsCaptureMethod
-    from ok.task.exceptions import CaptureBusyException
 else:
-    bitblt = None
-    BitBltCaptureMethod = None
-    ForegroundBitBltCaptureMethod = None
-    DesktopDuplicationCaptureMethod = None
-    WindowsGraphicsCaptureMethod = None
-    CaptureBusyException = None
+    class _DummyCaptureMethod:
+        hwnd_window = None
+        exit_event = None
+        last_start_failure_key = None
+        last_start_failure_time = 0
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start_or_stop(self):
+            pass
+
+        def get_capture_hwnd(self):
+            pass
+
+        def get_frame_for_probe(self, timeout=None):
+            pass
+
+        def get_name(self):
+            return "DummyCapture"
+
+        def get_frame(self):
+            pass
+
+        def do_get_frame(self):
+            pass
+
+        def close(self):
+            pass
+
+    class _DummyBitBltModule:
+        render_full = False
+
+    bitblt = _DummyBitBltModule()
+    BitBltCaptureMethod = _DummyCaptureMethod
+    ForegroundBitBltCaptureMethod = _DummyCaptureMethod
+    DesktopDuplicationCaptureMethod = _DummyCaptureMethod
+    WindowsGraphicsCaptureMethod = _DummyCaptureMethod
 
 
 def update_capture_method(config, capture_method, hwnd, exit_event=None, selected_method=None):
-    if sys.platform != 'win32':
-        return None
     try:
         method_preferences = config.get('capture_method', [])
         if selected_method and selected_method in method_preferences:
